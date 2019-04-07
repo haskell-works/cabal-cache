@@ -63,6 +63,7 @@ executable hw-ci-assist
   hs-source-dirs:       app
   other-modules:        App.Commands
                         App.Commands.Options.Types
+                        App.Commands.SyncFromArchive
                         App.Commands.SyncToArchive
                         App.Static
 
