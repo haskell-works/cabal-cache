@@ -30,6 +30,7 @@ import qualified System.IO                    as IO
 
 runSyncFromArchive :: Z.SyncFromArchiveOptions -> IO ()
 runSyncFromArchive opts = do
+  let archiveUri = opts ^. the @"archiveUri"
   lbs <- LBS.readFile "dist-newstyle/cache/plan.json"
   case A.eitherDecode lbs of
     Right (planJson :: Z.PlanJson) -> do

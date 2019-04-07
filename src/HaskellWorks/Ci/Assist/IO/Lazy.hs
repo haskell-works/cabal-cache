@@ -3,6 +3,8 @@
 
 module HaskellWorks.Ci.Assist.IO.Lazy
   ( readResource
+  , resourceExists
+  , headS3Uri
   ) where
 
 import Antiope.Core
@@ -37,3 +39,15 @@ readResource :: MonadResource m => AWS.Env -> Text -> m (Maybe LBS.ByteString)
 readResource envAws resourceUri = case AWS.fromText resourceUri of
   Right s3Uri -> runAws envAws $ AWS.downloadFromS3Uri s3Uri
   Left _      -> liftIO $ Just <$> LBS.readFile (T.unpack resourceUri)
+
+resourceExists :: MonadResource m => AWS.Env -> Text -> m (Maybe LBS.ByteString)
+resourceExists envAws resourceUri = case AWS.fromText resourceUri of
+  Right s3Uri -> runAws envAws $ AWS.downloadFromS3Uri s3Uri
+  Left _      -> liftIO $ Just <$> LBS.readFile (T.unpack resourceUri)
+
+headS3Uri :: (MonadResource m, MonadCatch m) => AWS.Env -> AWS.S3Uri -> m (Either String AWS.HeadObjectResponse)
+headS3Uri envAws (AWS.S3Uri b k) =
+  catch (Right <$> runAws envAws (AWS.send (AWS.headObject b k))) $ \(e :: AWS.Error) ->
+    case e of
+      (AWS.ServiceError (AWS.ServiceError' _ (HTTP.Status 404 _) _ _ _ _)) -> return (Left "Not found")
+      _                                                                    -> throwM e

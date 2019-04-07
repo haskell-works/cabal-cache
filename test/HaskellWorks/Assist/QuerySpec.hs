@@ -1,7 +1,6 @@
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes       #-}
-{-# LANGUAGE TypeApplications  #-}
 
 module HaskellWorks.Assist.QuerySpec
   ( spec
@@ -20,7 +19,7 @@ import qualified HaskellWorks.Ci.Assist.Types as Z
 
 {-# ANN module ("HLint: ignore Redundant do"        :: String) #-}
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
-{-# ANN module ("HLint: redundant bracket"          :: String) #-}
+{-# ANN module ("HLint: ignore Redundant bracket"   :: String) #-}
 
 spec :: Spec
 spec = describe "HaskellWorks.Assist.QuerySpec" $ do
