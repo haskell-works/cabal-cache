@@ -40,10 +40,12 @@ readResource envAws resourceUri = case AWS.fromText resourceUri of
   Right s3Uri -> runAws envAws $ AWS.downloadFromS3Uri s3Uri
   Left _      -> liftIO $ Just <$> LBS.readFile (T.unpack resourceUri)
 
-resourceExists :: MonadResource m => AWS.Env -> Text -> m (Maybe LBS.ByteString)
+resourceExists :: (MonadResource m, MonadCatch m) => AWS.Env -> Text -> m Bool
 resourceExists envAws resourceUri = case AWS.fromText resourceUri of
-  Right s3Uri -> runAws envAws $ AWS.downloadFromS3Uri s3Uri
-  Left _      -> liftIO $ Just <$> LBS.readFile (T.unpack resourceUri)
+  Right s3Uri -> do
+    result <- headS3Uri envAws s3Uri
+    return (either (const False) (const True) result)
+  Left _ -> liftIO $ IO.doesFileExist (T.unpack resourceUri)
 
 headS3Uri :: (MonadResource m, MonadCatch m) => AWS.Env -> AWS.S3Uri -> m (Either String AWS.HeadObjectResponse)
 headS3Uri envAws (AWS.S3Uri b k) =

@@ -76,6 +76,7 @@ executable hw-ci-assist
           , amazonka
           , amazonka-core
           , amazonka-s3
+          , antiope-core
           , bytestring
           , directory
           , generic-lens

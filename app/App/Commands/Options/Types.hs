@@ -3,13 +3,14 @@
 
 module App.Commands.Options.Types where
 
+import Data.Text    (Text)
 import GHC.Generics
 import GHC.Word     (Word8)
 
 newtype SyncToArchiveOptions = SyncToArchiveOptions
-  { archiveUri :: FilePath
+  { archiveUri :: Text
   } deriving (Eq, Show, Generic)
 
 newtype SyncFromArchiveOptions = SyncFromArchiveOptions
-  { archiveUri  :: FilePath
+  { archiveUri :: Text
   } deriving (Eq, Show, Generic)

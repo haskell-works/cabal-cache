@@ -34,8 +34,7 @@ runSyncToArchive opts = do
   lbs <- LBS.readFile "dist-newstyle/cache/plan.json"
   case A.eitherDecode lbs of
     Right (planJson :: Z.PlanJson) -> do
-      home <- T.pack <$> IO.getHomeDirectory
-      let archivePath = home <> "/.cabal/archive/" <> (planJson ^. the @"compilerId")
+      let archivePath = homeDirectory <> "/.cabal/archive/" <> (planJson ^. the @"compilerId")
       IO.createDirectoryIfMissing True (T.unpack archivePath)
 
       forM_ (toPackageDirectories planJson) $ \packageDirectory -> do
@@ -55,10 +54,11 @@ runSyncToArchive opts = do
 optsSyncToArchive :: Parser Z.SyncToArchiveOptions
 optsSyncToArchive = Z.SyncToArchiveOptions
   <$> strOption
-        (   long "archive-uri"
-        <>  help "Archive URI to sync to"
-        <>  metavar "S3_URI"
-        )
+      (   long "archive-uri"
+      <>  help "Archive URI to sync to"
+      <>  metavar "S3_URI"
+      <>  value (homeDirectory <> "/.cabal/archive")
+      )
 
 cmdSyncToArchive :: Mod CommandFields (IO ())
 cmdSyncToArchive = command "sync-to-archive"  $ flip info idm $ runSyncToArchive <$> optsSyncToArchive
