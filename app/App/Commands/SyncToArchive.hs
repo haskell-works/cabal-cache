@@ -7,6 +7,7 @@ module App.Commands.SyncToArchive
   ( cmdSyncToArchive
   ) where
 
+import App.Static
 import Control.Lens
 import Control.Monad
 import Data.Generics.Product.Any
@@ -38,10 +39,11 @@ runSyncToArchive opts = do
       IO.createDirectoryIfMissing True (T.unpack archivePath)
 
       forM_ (toPackageDirectories planJson) $ \packageDirectory -> do
-        let archiveFile = home <> "/.cabal/archive/" <> packageDirectory <> ".tar.gz"
-        let packageStorePath = home <> "/.cabal/store/" <> packageDirectory
+        let archiveFile = homeDirectory <> "/.cabal/archive/" <> packageDirectory <> ".tar.gz"
+        let packageStorePath = homeDirectory <> "/.cabal/store/" <> packageDirectory
+        packageStorePathExists <- IO.doesDirectoryExist (T.unpack packageStorePath)
         archiveFileExists <- IO.doesFileExist (T.unpack archiveFile)
-        unless archiveFileExists $ do
+        when (not archiveFileExists && packageStorePathExists) $ do
           T.putStrLn $ "Creating " <> archiveFile
           LBS.writeFile (T.unpack archiveFile) . F.compress . F.write =<< F.pack (T.unpack packageStorePath) ["."]
 
