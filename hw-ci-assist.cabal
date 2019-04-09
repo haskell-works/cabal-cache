@@ -19,11 +19,13 @@ source-repository head
 
 common base                 { build-depends: base                 >= 4.7        && < 5      }
 
+common directory            { build-depends: directory            >= 1.3.3.0    && < 1.4    }
 common hedgehog             { build-depends: hedgehog             >= 0.5        && < 0.7    }
 common hspec                { build-depends: hspec                >= 2.4        && < 3      }
-common hw-hspec-hedgehog    { build-depends: hw-hspec-hedgehog    >= 0.1.0.4    && < 0.2    }
 common hw-hedgehog          { build-depends: hw-hedgehog          >= 0.1.0.3    && < 0.2    }
+common hw-hspec-hedgehog    { build-depends: hw-hspec-hedgehog    >= 0.1.0.4    && < 0.2    }
 common optparse-applicative { build-depends: optparse-applicative >= 0.14       && < 0.15   }
+common text                 { build-depends: text                 >= 1.2.3.1    && < 1.3    }
 
 common config
   default-language:     Haskell2010
@@ -33,10 +35,13 @@ library
 
 executable hw-ci-assist
   import:   base, config
+          , directory
           , optparse-applicative
+          , text
   build-depends:        hw-ci-assist
   main-is:              Main.hs
-  hs-source-dirs:       src
+  hs-source-dirs:       app
+  other-modules:        App.Static
 
 test-suite hw-ci-assist-test
   import:   base, config
