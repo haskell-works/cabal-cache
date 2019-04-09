@@ -12,6 +12,7 @@ import Antiope.Env
 import App.Static
 import Control.Lens
 import Control.Monad
+import Control.Monad.IO.Class
 import Control.Monad.Trans.Resource
 import Data.Generics.Product.Any
 import Data.Maybe
@@ -56,13 +57,14 @@ runSyncFromArchive opts = do
         arhiveFileExists <- runResourceT $ IO.resourceExists env archiveFile
         when (not storeDirectoryExists && arhiveFileExists) $ do
           IO.createDirectoryIfMissing True (T.unpack packageStorePath)
-          maybeArchiveFileContents <- runResAws env $ IO.readResource env archiveFile
-          case maybeArchiveFileContents of
-            Just archiveFileContents -> do
-              T.putStrLn $ "Extracting " <> archiveFile
-              F.unpack (T.unpack baseDir) (F.read (F.decompress archiveFileContents))
-            Nothing -> do
-              T.putStrLn $ "Archive unavilable: " <> archiveFile
+          runResAws env $ do
+            maybeArchiveFileContents <- IO.readResource env archiveFile
+            case maybeArchiveFileContents of
+              Just archiveFileContents -> do
+                liftIO $ T.putStrLn $ "Extracting " <> archiveFile
+                liftIO $ F.unpack (T.unpack baseDir) (F.read (F.decompress archiveFileContents))
+              Nothing -> do
+                liftIO $ T.putStrLn $ "Archive unavilable: " <> archiveFile
 
     Left errorMessage -> do
       IO.putStrLn $ "ERROR: Unable to parse plan.json file: " <> errorMessage
