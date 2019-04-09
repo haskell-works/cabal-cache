@@ -12,11 +12,12 @@ import Antiope.Env
 import App.Static
 import Control.Lens
 import Control.Monad
+import Control.Monad.Trans.Resource
 import Data.Generics.Product.Any
 import Data.Maybe
-import Data.Semigroup              ((<>))
+import Data.Semigroup               ((<>))
 import HaskellWorks.Ci.Assist.Core
-import Options.Applicative         hiding (columns)
+import Options.Applicative          hiding (columns)
 
 import qualified App.Commands.Options.Types     as Z
 import qualified Codec.Archive.Tar              as F
@@ -34,6 +35,9 @@ import qualified System.IO                      as IO
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
 {-# ANN module ("HLint: ignore Redundant do"        :: String) #-}
 
+logger :: LogLevel -> LBSC.ByteString -> IO ()
+logger _ _ = return ()
+
 runSyncFromArchive :: Z.SyncFromArchiveOptions -> IO ()
 runSyncFromArchive opts = do
   let archiveUri = opts ^. the @"archiveUri"
@@ -41,7 +45,7 @@ runSyncFromArchive opts = do
   lbs <- LBS.readFile "dist-newstyle/cache/plan.json"
   case A.eitherDecode lbs of
     Right (planJson :: Z.PlanJson) -> do
-      env <- mkEnv Oregon (const LBSC.putStrLn)
+      env <- mkEnv Oregon logger
       let archivePath = archiveUri <> "/" <> (planJson ^. the @"compilerId")
 
       forM_ (toPackageDirectories planJson) $ \packageDirectory -> do

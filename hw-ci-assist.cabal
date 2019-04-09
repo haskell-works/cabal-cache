@@ -82,6 +82,7 @@ executable hw-ci-assist
           , generic-lens
           , lens
           , optparse-applicative
+          , resourcet
           , tar
           , text
           , zlib
