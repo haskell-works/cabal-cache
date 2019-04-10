@@ -48,9 +48,10 @@ runSyncFromArchive opts = do
       env <- mkEnv Oregon logger
       let archivePath = archiveUri <> "/" <> (planJson ^. the @"compilerId")
 
-      forM_ (toPackageDirectories planJson) $ \packageDirectory -> do
-        let archiveFile = archiveUri <> "/" <> packageDirectory <> ".tar.gz"
-        let packageStorePath = homeDirectory <> "/.cabal/store/" <> packageDirectory
+      forM_ (getPackages planJson) $ \pInfo -> do
+        let baseDir = homeDirectory <> "/.cabal/store/"
+        let archiveFile = archiveUri <> "/" <> packageDir pInfo <> ".tar.gz"
+        let packageStorePath = baseDir <> packageDir pInfo
         storeDirectoryExists <- IO.doesDirectoryExist (T.unpack packageStorePath)
         arhiveFileExists <- runResourceT $ IO.resourceExists env archiveFile
         when (not storeDirectoryExists && arhiveFileExists) $ do
@@ -59,7 +60,7 @@ runSyncFromArchive opts = do
           case maybeArchiveFileContents of
             Just archiveFileContents -> do
               T.putStrLn $ "Extracting " <> archiveFile
-              F.unpack (T.unpack packageStorePath) (F.read (F.decompress archiveFileContents))
+              F.unpack (T.unpack baseDir) (F.read (F.decompress archiveFileContents))
             Nothing -> do
               T.putStrLn $ "Archive unavilable: " <> archiveFile
 
