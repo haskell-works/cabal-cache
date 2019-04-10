@@ -8,8 +8,10 @@ module HaskellWorks.Assist.AwsSpec
 import Antiope.Core
 import Antiope.Env
 import Control.Lens
+import Control.Monad
 import Control.Monad.IO.Class
 import Data.Generics.Product.Any
+import Data.Maybe
 import Data.Maybe                     (fromJust)
 import HaskellWorks.Ci.Assist.IO.Lazy
 import HaskellWorks.Hspec.Hedgehog
@@ -24,6 +26,7 @@ import qualified Data.Aeson                   as A
 import qualified Data.ByteString.Lazy         as LBS
 import qualified Data.ByteString.Lazy.Char8   as LBSC
 import qualified HaskellWorks.Ci.Assist.Types as Z
+import qualified System.Environment           as IO
 
 {-# ANN module ("HLint: ignore Redundant do"        :: String) #-}
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
@@ -32,6 +35,8 @@ import qualified HaskellWorks.Ci.Assist.Types as Z
 spec :: Spec
 spec = describe "HaskellWorks.Assist.QuerySpec" $ do
   it "stub" $ requireTest $ do
-    envAws <- liftIO $ mkEnv Oregon (const LBSC.putStrLn)
-    result <- liftIO $ runResourceT $ headS3Uri envAws $ AWS.S3Uri "jky-mayhem" "hjddhd"
-    result === Left "Not found"
+    ci <- liftIO $ IO.lookupEnv "CI" <&> isJust
+    unless ci $ do
+      envAws <- liftIO $ mkEnv Oregon (const LBSC.putStrLn)
+      result <- liftIO $ runResourceT $ headS3Uri envAws $ AWS.S3Uri "jky-mayhem" "hjddhd"
+      result === Left "Not found"
