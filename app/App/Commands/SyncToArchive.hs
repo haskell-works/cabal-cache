@@ -46,14 +46,16 @@ runSyncToArchive opts = do
       let archivePath = homeDirectory <> "/.cabal/archive/" <> (planJson ^. the @"compilerId")
       IO.createDirectoryIfMissing True (T.unpack archivePath)
 
-      forM_ (toPackageDirectories planJson) $ \packageDirectory -> do
-        let archiveFile = archiveUri <> "/" <> packageDirectory <> ".tar.gz"
-        let packageStorePath = homeDirectory <> "/.cabal/store/" <> packageDirectory
+      forM_ (getPackages planJson) $ \pInfo -> do
+        let baseDir = homeDirectory <> "/.cabal/store/"
+        let archiveFile = archiveUri <> "/" <> packageDir pInfo <> ".tar.gz"
+        let packageStorePath = baseDir <> packageDir pInfo
+        let packageConfigPath = baseDir <> confPath pInfo
         packageStorePathExists <- IO.doesDirectoryExist (T.unpack packageStorePath)
         archiveFileExists <- runResourceT $ IO.resourceExists envAws archiveFile
         when (not archiveFileExists && packageStorePathExists) $ do
           T.putStrLn $ "Creating " <> archiveFile
-          IO.writeResource envAws archiveFile . F.compress . F.write =<< F.pack (T.unpack packageStorePath) ["."]
+          IO.writeResource envAws archiveFile . F.compress . F.write =<< F.pack (T.unpack baseDir) (relativePaths pInfo)
 
     Left errorMessage -> do
       IO.putStrLn $ "ERROR: Unable to parse plan.json file: " <> errorMessage
