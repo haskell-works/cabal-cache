@@ -11,8 +11,7 @@ import Control.Lens
 import Control.Monad
 import Control.Monad.IO.Class
 import Data.Generics.Product.Any
-import Data.Maybe
-import Data.Maybe                     (fromJust)
+import Data.Maybe                     (fromJust, isJust)
 import HaskellWorks.Ci.Assist.IO.Lazy
 import HaskellWorks.Hspec.Hedgehog
 import Hedgehog
