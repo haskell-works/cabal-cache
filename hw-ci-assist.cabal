@@ -57,47 +57,38 @@ library
           , amazonka-s3
           , antiope-core
           , antiope-s3
-          , conduit-extra
           , bytestring
+          , conduit-extra
           , directory
           , exceptions
+          , filepath
           , generic-lens
           , http-types
           , lens
+          , lens
           , mtl
+          , optparse-applicative
           , resourcet
           , selective
+          , tar
           , text
-  exposed-modules:      HaskellWorks.Ci.Assist.Core
+          , zlib
+  exposed-modules:      App.Commands
+                        App.Commands.Options.Types
+                        App.Commands.SyncFromArchive
+                        App.Commands.SyncToArchive
+                        App.Static
+                        HaskellWorks.Ci.Assist.Core
                         HaskellWorks.Ci.Assist.IO.Lazy
                         HaskellWorks.Ci.Assist.Types
   hs-source-dirs:       src
 
 executable hw-ci-assist
   import:   base, config
-          , aeson
-          , amazonka
-          , amazonka-core
-          , amazonka-s3
-          , antiope-core
-          , bytestring
-          , directory
-          , filepath
-          , generic-lens
-          , lens
           , optparse-applicative
-          , resourcet
-          , tar
-          , text
-          , zlib
   build-depends:        hw-ci-assist
   main-is:              Main.hs
   hs-source-dirs:       app
-  other-modules:        App.Commands
-                        App.Commands.Options.Types
-                        App.Commands.SyncFromArchive
-                        App.Commands.SyncToArchive
-                        App.Static
 
 test-suite hw-ci-assist-test
   import:   base, config
