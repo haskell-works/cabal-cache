@@ -7,33 +7,33 @@ module App.Commands.SyncToArchive
   ( cmdSyncToArchive
   ) where
 
-import           Antiope.Env
-import           App.Static
-import           Control.Lens
-import           Control.Monad
-import           Control.Monad.Trans.Resource
-import           Data.Generics.Product.Any
-import           Data.Semigroup                       ((<>))
-import           HaskellWorks.Ci.Assist.Core
-import           HaskellWorks.Ci.Assist.PackageConfig (templateConfig)
-import           HaskellWorks.Ci.Assist.Tar           (packFileEntryWith)
-import           Options.Applicative                  hiding (columns)
-import           System.FilePath                      ((</>))
+import Antiope.Env
+import App.Static
+import Control.Lens
+import Control.Monad
+import Control.Monad.Trans.Resource
+import Data.Generics.Product.Any
+import Data.Semigroup                       ((<>))
+import HaskellWorks.Ci.Assist.Core
+import HaskellWorks.Ci.Assist.PackageConfig (templateConfig)
+import HaskellWorks.Ci.Assist.Tar           (packFileEntryWith)
+import Options.Applicative                  hiding (columns)
+import System.FilePath                      ((</>))
 
-import qualified App.Commands.Options.Types           as Z
-import qualified Codec.Archive.Tar                    as F
-import qualified Codec.Archive.Tar.Entry              as F
+import qualified App.Commands.Options.Types as Z
+import qualified Codec.Archive.Tar          as F
+import qualified Codec.Archive.Tar.Entry    as F
 
-import qualified Codec.Compression.GZip               as F
-import qualified Data.Aeson                           as A
-import qualified Data.ByteString.Lazy                 as LBS
-import qualified Data.ByteString.Lazy.Char8           as LBSC
-import qualified Data.Text                            as T
-import qualified Data.Text.IO                         as T
-import qualified HaskellWorks.Ci.Assist.IO.Lazy       as IO
-import qualified HaskellWorks.Ci.Assist.Types         as Z
-import qualified System.Directory                     as IO
-import qualified System.IO                            as IO
+import qualified Codec.Compression.GZip         as F
+import qualified Data.Aeson                     as A
+import qualified Data.ByteString.Lazy           as LBS
+import qualified Data.ByteString.Lazy.Char8     as LBSC
+import qualified Data.Text                      as T
+import qualified Data.Text.IO                   as T
+import qualified HaskellWorks.Ci.Assist.IO.Lazy as IO
+import qualified HaskellWorks.Ci.Assist.Types   as Z
+import qualified System.Directory               as IO
+import qualified System.IO                      as IO
 
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
 {-# ANN module ("HLint: ignore Redundant do"        :: String) #-}

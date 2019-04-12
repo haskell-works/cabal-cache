@@ -1,13 +1,12 @@
 module HaskellWorks.Ci.Assist.Tar
 where
 
-import           Codec.Archive.Tar
-import           Codec.Archive.Tar.Entry
-import           Data.Time.Clock.POSIX   (utcTimeToPOSIXSeconds)
-import           System.Directory        (Permissions (..), getModificationTime,
-                                          getPermissions)
+import Codec.Archive.Tar
+import Codec.Archive.Tar.Entry
+import Data.Time.Clock.POSIX   (utcTimeToPOSIXSeconds)
+import System.Directory        (Permissions (..), getModificationTime, getPermissions)
 
-import qualified Data.ByteString.Lazy    as LBS
+import qualified Data.ByteString.Lazy as LBS
 
 packFileEntryWith :: (LBS.ByteString -> LBS.ByteString)   -- ^ Transform file content
   -> FilePath                                             -- ^ Full path to find the file on the local disk
@@ -30,10 +29,12 @@ mapFileEntriesWith :: (FilePath -> Bool)
   -> (LBS.ByteString -> LBS.ByteString)
   -> Entries e
   -> Entries e
-mapFileEntriesWith pref transform entries =
+mapFileEntriesWith pred transform entries =
   flip mapEntriesNoFail entries $ \entry ->
-    case entryContent entry of
-      NormalFile bs size ->
-        let bs' = transform bs
-        in entry { entryContent = NormalFile bs' (LBS.length bs') }
-      _ -> entry
+    if pred (entryPath entry)
+      then case entryContent entry of
+          NormalFile bs size ->
+            let bs' = transform bs
+            in entry { entryContent = NormalFile bs' (LBS.length bs') }
+          _ -> entry
+      else entry
