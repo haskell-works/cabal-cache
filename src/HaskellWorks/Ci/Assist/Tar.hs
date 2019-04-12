@@ -1,13 +1,12 @@
 module HaskellWorks.Ci.Assist.Tar
 where
 
-import           Codec.Archive.Tar
-import           Codec.Archive.Tar.Entry
-import           Data.Time.Clock.POSIX   (utcTimeToPOSIXSeconds)
-import           System.Directory        (Permissions (..), getModificationTime,
-                                          getPermissions)
+import Codec.Archive.Tar
+import Codec.Archive.Tar.Entry
+import Data.Time.Clock.POSIX   (utcTimeToPOSIXSeconds)
+import System.Directory        (Permissions (..), getModificationTime, getPermissions)
 
-import qualified Data.ByteString.Lazy    as LBS
+import qualified Data.ByteString.Lazy as LBS
 
 packFileEntryWith :: (LBS.ByteString -> LBS.ByteString)   -- ^ Transform file content
   -> FilePath                                             -- ^ Full path to find the file on the local disk
