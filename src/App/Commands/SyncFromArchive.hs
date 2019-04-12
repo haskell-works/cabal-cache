@@ -36,6 +36,7 @@ import qualified System.Directory               as IO
 import qualified System.Exit                    as IO
 import qualified System.IO                      as IO
 import qualified System.Process                 as IO
+import qualified UnliftIO.Async                 as IO
 
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
 {-# ANN module ("HLint: ignore Redundant do"        :: String) #-}
@@ -63,7 +64,7 @@ runSyncFromArchive opts = do
     Right (planJson :: Z.PlanJson) -> do
       env <- mkEnv Oregon logger
       let archivePath                 = archiveUri <> "/" <> (planJson ^. the @"compilerId")
-      let baseDir                     = homeDirectory <> "/.cabal/store"
+      let baseDir                     = opts ^. the @"storePath"
       let storeCompilerPath           = baseDir <> "/" <> (planJson ^. the @"compilerId")
       let storeCompilerPackageDbPath  = storeCompilerPath <> "/package.db"
       let storeCompilerLibPath        = storeCompilerPath <> "/lib"
@@ -75,7 +76,7 @@ runSyncFromArchive opts = do
 
       packages <- getPackages baseDir planJson
 
-      forM_ packages $ \pInfo -> do
+      IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> do
         let archiveFile = archiveUri <> "/" <> packageDir pInfo <> ".tar.gz"
         let packageStorePath = baseDir <> "/" <> packageDir pInfo
         storeDirectoryExists <- IO.doesDirectoryExist (T.unpack packageStorePath)
@@ -94,13 +95,14 @@ runSyncFromArchive opts = do
                 liftIO $ F.unpack (T.unpack baseDir) entries'
               Nothing -> do
                 liftIO $ T.putStrLn $ "Archive unavilable: " <> archiveFile
-        hGhcPkg2 <- IO.spawnProcess "ghc-pkg" ["recache", "--package-db", T.unpack storeCompilerPackageDbPath]
-        exitCodeGhcPkg2 <- IO.waitForProcess hGhcPkg2
-        case exitCodeGhcPkg2 of
-          IO.ExitFailure _ -> do
-            IO.hPutStrLn IO.stderr "ERROR: Unable to recache package db"
-            IO.exitWith (IO.ExitFailure 1)
-          _ -> return ()
+      IO.putStrLn "Recaching package database"
+      hGhcPkg2 <- IO.spawnProcess "ghc-pkg" ["recache", "--package-db", T.unpack storeCompilerPackageDbPath]
+      exitCodeGhcPkg2 <- IO.waitForProcess hGhcPkg2
+      case exitCodeGhcPkg2 of
+        IO.ExitFailure _ -> do
+          IO.hPutStrLn IO.stderr "ERROR: Unable to recache package db"
+          IO.exitWith (IO.ExitFailure 1)
+        _ -> return ()
 
     Left errorMessage -> do
       IO.putStrLn $ "ERROR: Unable to parse plan.json file: " <> errorMessage
@@ -114,6 +116,18 @@ optsSyncFromArchive = Z.SyncFromArchiveOptions
       <>  help "Archive URI to sync to"
       <>  metavar "S3_URI"
       <>  value (homeDirectory <> "/.cabal/archive")
+      )
+  <*> strOption
+      (   long "store-path"
+      <>  help "Path to cabal store"
+      <>  metavar "DIRECTORY"
+      <>  value (homeDirectory <> "/.cabal/store")
+      )
+  <*> option auto
+      (   long "threads"
+      <>  help "Number of concurrent threads"
+      <>  metavar "NUM_THREADS"
+      <>  value 4
       )
 
 cmdSyncFromArchive :: Mod CommandFields (IO ())

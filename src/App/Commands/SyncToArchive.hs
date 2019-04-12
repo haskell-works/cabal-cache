@@ -34,6 +34,7 @@ import qualified HaskellWorks.Ci.Assist.IO.Lazy as IO
 import qualified HaskellWorks.Ci.Assist.Types   as Z
 import qualified System.Directory               as IO
 import qualified System.IO                      as IO
+import qualified UnliftIO.Async                 as IO
 
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
 {-# ANN module ("HLint: ignore Redundant do"        :: String) #-}
@@ -50,10 +51,10 @@ runSyncToArchive opts = do
       envAws <- mkEnv Oregon logger
       let archivePath = homeDirectory <> "/.cabal/archive/" <> (planJson ^. the @"compilerId")
       IO.createDirectoryIfMissing True (T.unpack archivePath)
-      let baseDir = homeDirectory <> "/.cabal/store"
+      let baseDir = opts ^. the @"storePath"
       packages <- getPackages baseDir planJson
 
-      forM_ packages $ \pInfo -> do
+      IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> do
         let archiveFile = archiveUri <> "/" <> packageDir pInfo <> ".tar.gz"
         let packageStorePath = baseDir <> "/" <> packageDir pInfo
         packageStorePathExists <- IO.doesDirectoryExist (T.unpack packageStorePath)
@@ -80,6 +81,18 @@ optsSyncToArchive = Z.SyncToArchiveOptions
       <>  help "Archive URI to sync to"
       <>  metavar "S3_URI"
       <>  value (homeDirectory <> "/.cabal/archive")
+      )
+  <*> strOption
+      (   long "store-path"
+      <>  help "Path to cabal store"
+      <>  metavar "DIRECTORY"
+      <>  value (homeDirectory <> "/.cabal/store")
+      )
+  <*> option auto
+      (   long "threads"
+      <>  help "Number of concurrent threads"
+      <>  metavar "NUM_THREADS"
+      <>  value 4
       )
 
 cmdSyncToArchive :: Mod CommandFields (IO ())
