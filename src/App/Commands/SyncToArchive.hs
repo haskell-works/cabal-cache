@@ -15,6 +15,7 @@ import Control.Monad.Trans.Resource
 import Data.Generics.Product.Any
 import Data.Semigroup                       ((<>))
 import HaskellWorks.Ci.Assist.Core
+import HaskellWorks.Ci.Assist.Options
 import HaskellWorks.Ci.Assist.PackageConfig (templateConfig)
 import HaskellWorks.Ci.Assist.Tar           (updateEntryWith)
 import Options.Applicative                  hiding (columns)
@@ -50,7 +51,7 @@ runSyncToArchive opts = do
   lbs <- LBS.readFile "dist-newstyle/cache/plan.json"
   case A.eitherDecode lbs of
     Right (planJson :: Z.PlanJson) -> do
-      envAws <- mkEnv Sydney logger
+      envAws <- mkEnv (opts ^. the @"region") logger
       let archivePath = homeDirectory <> "/.cabal/archive/" <> (planJson ^. the @"compilerId")
       IO.createDirectoryIfMissing True (T.unpack archivePath)
       let baseDir = opts ^. the @"storePath"
@@ -95,6 +96,13 @@ optsSyncToArchive = Z.SyncToArchiveOptions
       <>  help "Number of concurrent threads"
       <>  metavar "NUM_THREADS"
       <>  value 4
+      )
+  <*> readOrFromTextOption
+      (  long "region"
+      <> short 'r'
+      <> metavar "AWS_REGION"
+      <> showDefault <> value Oregon
+      <> help "The AWS region in which to operate"
       )
 
 cmdSyncToArchive :: Mod CommandFields (IO ())

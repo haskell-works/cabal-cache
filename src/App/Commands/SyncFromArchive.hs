@@ -18,8 +18,10 @@ import Data.Generics.Product.Any
 import Data.Maybe
 import Data.Semigroup                       ((<>))
 import HaskellWorks.Ci.Assist.Core
+import HaskellWorks.Ci.Assist.Options
 import HaskellWorks.Ci.Assist.PackageConfig (unTemplateConfig)
 import HaskellWorks.Ci.Assist.Tar           (mapEntriesWith)
+import Network.AWS.Types                    (Region (Oregon))
 import Options.Applicative                  hiding (columns)
 
 import qualified App.Commands.Options.Types        as Z
@@ -64,7 +66,7 @@ runSyncFromArchive opts = do
   lbs <- LBS.readFile "dist-newstyle/cache/plan.json"
   case A.eitherDecode lbs of
     Right (planJson :: Z.PlanJson) -> do
-      env <- mkEnv Sydney logger
+      env <- mkEnv (opts ^. the @"region") logger
       let archivePath                 = archiveUri <> "/" <> (planJson ^. the @"compilerId")
       let baseDir                     = opts ^. the @"storePath"
       let storeCompilerPath           = baseDir <> "/" <> (planJson ^. the @"compilerId")
@@ -130,6 +132,13 @@ optsSyncFromArchive = Z.SyncFromArchiveOptions
       <>  help "Number of concurrent threads"
       <>  metavar "NUM_THREADS"
       <>  value 4
+      )
+  <*> readOrFromTextOption
+      (  long "region"
+      <> short 'r'
+      <> metavar "AWS_REGION"
+      <> showDefault <> value Oregon
+      <> help "The AWS region in which to operate"
       )
 
 cmdSyncFromArchive :: Mod CommandFields (IO ())

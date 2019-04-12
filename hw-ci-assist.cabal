@@ -90,12 +90,13 @@ library
       App.Commands.SyncToArchive
       App.Static
       HaskellWorks.Ci.Assist.Core
+      HaskellWorks.Ci.Assist.IO.Console
       HaskellWorks.Ci.Assist.IO.Lazy
+      HaskellWorks.Ci.Assist.Options
       HaskellWorks.Ci.Assist.PackageConfig
       HaskellWorks.Ci.Assist.Tar
       HaskellWorks.Ci.Assist.Text
       HaskellWorks.Ci.Assist.Types
-      HaskellWorks.Ci.Assist.IO.Console
 
   hs-source-dirs:       src
 
