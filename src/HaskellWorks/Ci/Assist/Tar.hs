@@ -29,10 +29,12 @@ mapFileEntriesWith :: (FilePath -> Bool)
   -> (LBS.ByteString -> LBS.ByteString)
   -> Entries e
   -> Entries e
-mapFileEntriesWith pref transform entries =
+mapFileEntriesWith pred transform entries =
   flip mapEntriesNoFail entries $ \entry ->
-    case entryContent entry of
-      NormalFile bs size ->
-        let bs' = transform bs
-        in entry { entryContent = NormalFile bs' (LBS.length bs') }
-      _ -> entry
+    if pred (entryPath entry)
+      then case entryContent entry of
+          NormalFile bs size ->
+            let bs' = transform bs
+            in entry { entryContent = NormalFile bs' (LBS.length bs') }
+          _ -> entry
+      else entry
