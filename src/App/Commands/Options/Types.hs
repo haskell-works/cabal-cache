@@ -7,10 +7,14 @@ import Data.Text    (Text)
 import GHC.Generics
 import GHC.Word     (Word8)
 
-newtype SyncToArchiveOptions = SyncToArchiveOptions
+data SyncToArchiveOptions = SyncToArchiveOptions
   { archiveUri :: Text
+  , storePath  :: Text
+  , threads    :: Int
   } deriving (Eq, Show, Generic)
 
-newtype SyncFromArchiveOptions = SyncFromArchiveOptions
+data SyncFromArchiveOptions = SyncFromArchiveOptions
   { archiveUri :: Text
+  , storePath  :: Text
+  , threads    :: Int
   } deriving (Eq, Show, Generic)
