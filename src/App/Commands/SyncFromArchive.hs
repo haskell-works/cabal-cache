@@ -48,9 +48,10 @@ runSyncFromArchive opts = do
     Right (planJson :: Z.PlanJson) -> do
       env <- mkEnv Oregon logger
       let archivePath = archiveUri <> "/" <> (planJson ^. the @"compilerId")
+      let baseDir = homeDirectory <> "/.cabal/store/"
+      packages <- getPackages baseDir planJson
 
-      forM_ (getPackages planJson) $ \pInfo -> do
-        let baseDir = homeDirectory <> "/.cabal/store/"
+      forM_ packages $ \pInfo -> do
         let archiveFile = archiveUri <> "/" <> packageDir pInfo <> ".tar.gz"
         let packageStorePath = baseDir <> packageDir pInfo
         storeDirectoryExists <- IO.doesDirectoryExist (T.unpack packageStorePath)

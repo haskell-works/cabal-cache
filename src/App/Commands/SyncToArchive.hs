@@ -17,12 +17,13 @@ import Data.Semigroup               ((<>))
 import HaskellWorks.Ci.Assist.Core
 import Options.Applicative          hiding (columns)
 
-import qualified App.Commands.Options.Types     as Z
-import qualified Codec.Archive.Tar              as F
-import qualified Codec.Compression.GZip         as F
-import qualified Data.Aeson                     as A
-import qualified Data.ByteString.Lazy           as LBS
-import qualified Data.ByteString.Lazy.Char8     as LBSC
+import qualified App.Commands.Options.Types as Z
+import qualified Codec.Archive.Tar          as F
+import qualified Codec.Compression.GZip     as F
+import qualified Data.Aeson                 as A
+import qualified Data.ByteString.Lazy       as LBS
+import qualified Data.ByteString.Lazy.Char8 as LBSC
+
 import qualified Data.Text                      as T
 import qualified Data.Text.IO                   as T
 import qualified HaskellWorks.Ci.Assist.IO.Lazy as IO
@@ -45,12 +46,12 @@ runSyncToArchive opts = do
       envAws <- mkEnv Oregon logger
       let archivePath = homeDirectory <> "/.cabal/archive/" <> (planJson ^. the @"compilerId")
       IO.createDirectoryIfMissing True (T.unpack archivePath)
+      let baseDir = homeDirectory <> "/.cabal/store/"
+      packages <- getPackages baseDir planJson
 
-      forM_ (getPackages planJson) $ \pInfo -> do
-        let baseDir = homeDirectory <> "/.cabal/store/"
+      forM_ packages $ \pInfo -> do
         let archiveFile = archiveUri <> "/" <> packageDir pInfo <> ".tar.gz"
         let packageStorePath = baseDir <> packageDir pInfo
-        let packageConfigPath = baseDir <> confPath pInfo
         packageStorePathExists <- IO.doesDirectoryExist (T.unpack packageStorePath)
         archiveFileExists <- runResourceT $ IO.resourceExists envAws archiveFile
         when (not archiveFileExists && packageStorePathExists) $ do
