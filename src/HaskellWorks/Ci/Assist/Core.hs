@@ -10,41 +10,53 @@ module HaskellWorks.Ci.Assist.Core
   ) where
 
 import Control.Lens
+import Control.Monad
 import Data.Aeson
+import Data.Bool
 import Data.Generics.Product.Any
+import Data.Maybe
 import Data.Semigroup            ((<>))
 import Data.Text                 (Text)
 import GHC.Generics
 
-import qualified Data.Text                    as Text
+import qualified Data.Text                    as T
 import qualified HaskellWorks.Ci.Assist.Types as Z
+import qualified System.Directory             as IO
+
+type CompilerId = Text
+type PackageId  = Text
+type PackageDir = Text
+type ConfPath   = Text
 
 data PackageInfo = PackageInfo
-  { compilerId :: !Text
-  , packageId  :: !Text
-  , packageDir :: !Text
-  , confPath   :: !Text
+  { compilerId :: CompilerId
+  , packageId  :: PackageId
+  , packageDir :: PackageDir
+  , confPath   :: Maybe ConfPath
   } deriving (Show, Eq)
 
 relativePaths :: PackageInfo -> [FilePath]
 relativePaths pInfo =
-  [ Text.unpack (packageDir pInfo)
-  , Text.unpack (confPath pInfo)
-  ]
+  [ T.unpack (packageDir pInfo)
+  ] <> maybeToList (T.unpack <$> confPath pInfo)
 
-getPackages :: Z.PlanJson -> [PackageInfo]
-getPackages planJson = mkPackageInfo compilerId <$> packageIds
-  where
-    compilerId :: Text
-    compilerId = planJson ^. the @"compilerId"
-    packageIds :: [Text]
-    packageIds = planJson ^.. the @"installPlan" . each . filtered predicate . the @"id"
-    predicate :: Z.Package -> Bool
-    predicate package = package ^. the @"packageType" /= "pre-existing" && package ^. the @"style" == Just "global"
+getPackages :: Text -> Z.PlanJson -> IO [PackageInfo]
+getPackages basePath planJson = forM packageIds (mkPackageInfo basePath compilerId)
+  where compilerId :: Text
+        compilerId = planJson ^. the @"compilerId"
+        packageIds :: [Text]
+        packageIds = planJson ^.. the @"installPlan" . each . filtered predicate . the @"id"
+        predicate :: Z.Package -> Bool
+        predicate package = package ^. the @"packageType" /= "pre-existing" && package ^. the @"style" == Just "global"
 
-    mkPackageInfo cid pid = PackageInfo
-      { compilerId  = cid
-      , packageId   = pid
-      , packageDir  = cid <> "/" <> pid
-      , confPath    = cid <> "/package.db/" <> pid <> ".conf"
-      }
+mkPackageInfo :: Text -> CompilerId -> PackageId -> IO PackageInfo
+mkPackageInfo basePath cid pid = do
+  let relativeConfPath = cid <> "/package.db/" <> pid <> ".conf"
+  let absoluteConfPath = basePath <> "/" <> relativeConfPath
+  absoluteConfPathExists <- IO.doesFileExist (T.unpack absoluteConfPath)
+  return PackageInfo
+    { compilerId  = cid
+    , packageId   = pid
+    , packageDir  = cid <> "/" <> pid
+    , confPath    = bool Nothing (Just relativeConfPath) absoluteConfPathExists
+    }
