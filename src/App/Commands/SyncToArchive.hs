@@ -16,7 +16,7 @@ import Data.Generics.Product.Any
 import Data.Semigroup                       ((<>))
 import HaskellWorks.Ci.Assist.Core
 import HaskellWorks.Ci.Assist.PackageConfig (templateConfig)
-import HaskellWorks.Ci.Assist.Tar           (packFileEntryWith)
+import HaskellWorks.Ci.Assist.Tar           (updateEntryWith)
 import Options.Applicative                  hiding (columns)
 import System.FilePath                      ((</>))
 
@@ -60,23 +60,18 @@ runSyncToArchive opts = do
         archiveFileExists <- runResourceT $ IO.resourceExists envAws archiveFile
         when (not archiveFileExists && packageStorePathExists) $ do
           T.putStrLn $ "Creating " <> archiveFile
-          IO.writeResource envAws archiveFile . F.compress . F.write =<< packPackage (T.unpack baseDir) pInfo
+          entries <- F.pack (T.unpack baseDir) (relativePaths pInfo)
+
+          let entries' = case confPath pInfo of
+                          Nothing   -> entries
+                          Just conf -> updateEntryWith (== T.unpack conf) (templateConfig (T.unpack baseDir)) <$> entries
+
+          IO.writeResource envAws archiveFile . F.compress . F.write $ entries
 
     Left errorMessage -> do
       IO.putStrLn $ "ERROR: Unable to parse plan.json file: " <> errorMessage
 
   return ()
-
-packPackage :: FilePath -> PackageInfo -> IO [F.Entry]
-packPackage baseDir pkg = do
-  plainEntries <- F.pack baseDir (T.unpack <$> [packageDir pkg])
-  case confPath pkg of
-    Nothing -> pure plainEntries
-    Just conf -> do
-      let fullConfPath = baseDir </> T.unpack conf
-      tarPath <- either fail pure (F.toTarPath False (T.unpack conf))
-      confEntry <- packFileEntryWith (templateConfig baseDir) fullConfPath tarPath
-      pure (confEntry : plainEntries)
 
 optsSyncToArchive :: Parser Z.SyncToArchiveOptions
 optsSyncToArchive = Z.SyncToArchiveOptions
