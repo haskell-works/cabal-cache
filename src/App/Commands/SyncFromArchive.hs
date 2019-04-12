@@ -16,9 +16,11 @@ import Control.Monad.IO.Class
 import Control.Monad.Trans.Resource
 import Data.Generics.Product.Any
 import Data.Maybe
-import Data.Semigroup               ((<>))
+import Data.Semigroup                       ((<>))
 import HaskellWorks.Ci.Assist.Core
-import Options.Applicative          hiding (columns)
+import HaskellWorks.Ci.Assist.PackageConfig (unTemplateConfig)
+import HaskellWorks.Ci.Assist.Tar           (mapFileEntriesWith)
+import Options.Applicative                  hiding (columns)
 
 import qualified App.Commands.Options.Types     as Z
 import qualified Codec.Archive.Tar              as F
@@ -63,7 +65,12 @@ runSyncFromArchive opts = do
             case maybeArchiveFileContents of
               Just archiveFileContents -> do
                 liftIO $ T.putStrLn $ "Extracting " <> archiveFile
-                liftIO $ F.unpack (T.unpack baseDir) (F.read (F.decompress archiveFileContents))
+                let entries = F.read (F.decompress archiveFileContents)
+                let entries' = case confPath pInfo of
+                                  Nothing   -> entries
+                                  Just conf -> mapFileEntriesWith (== T.unpack conf) (unTemplateConfig (T.unpack baseDir)) entries
+
+                liftIO $ F.unpack (T.unpack baseDir) entries'
               Nothing -> do
                 liftIO $ T.putStrLn $ "Archive unavilable: " <> archiveFile
 
