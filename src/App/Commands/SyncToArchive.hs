@@ -50,12 +50,12 @@ runSyncToArchive opts = do
       envAws <- mkEnv Oregon logger
       let archivePath = homeDirectory <> "/.cabal/archive/" <> (planJson ^. the @"compilerId")
       IO.createDirectoryIfMissing True (T.unpack archivePath)
-      let baseDir = homeDirectory <> "/.cabal/store/"
+      let baseDir = homeDirectory <> "/.cabal/store"
       packages <- getPackages baseDir planJson
 
       forM_ packages $ \pInfo -> do
         let archiveFile = archiveUri <> "/" <> packageDir pInfo <> ".tar.gz"
-        let packageStorePath = baseDir <> packageDir pInfo
+        let packageStorePath = baseDir <> "/" <> packageDir pInfo
         packageStorePathExists <- IO.doesDirectoryExist (T.unpack packageStorePath)
         archiveFileExists <- runResourceT $ IO.resourceExists envAws archiveFile
         when (not archiveFileExists && packageStorePathExists) $ do

@@ -50,16 +50,24 @@ runSyncFromArchive opts = do
     Right (planJson :: Z.PlanJson) -> do
       env <- mkEnv Oregon logger
       let archivePath = archiveUri <> "/" <> (planJson ^. the @"compilerId")
-      let baseDir = homeDirectory <> "/.cabal/store/"
+      let baseDir = homeDirectory <> "/.cabal/store"
+      let storeCompilerPath = baseDir <> "/" <> (planJson ^. the @"compilerId")
+      let storeCompilerLibPath = storeCompilerPath <> "/lib"
+
+      IO.putStrLn "Creating store directories"
+      IO.createDirectoryIfMissing True (T.unpack baseDir)
+      IO.createDirectoryIfMissing True (T.unpack storeCompilerPath)
+      IO.createDirectoryIfMissing True (T.unpack storeCompilerLibPath)
+      IO.putStrLn $ T.unpack $ "Library path: " <> storeCompilerLibPath
+
       packages <- getPackages baseDir planJson
 
       forM_ packages $ \pInfo -> do
         let archiveFile = archiveUri <> "/" <> packageDir pInfo <> ".tar.gz"
-        let packageStorePath = baseDir <> packageDir pInfo
+        let packageStorePath = baseDir <> "/" <> packageDir pInfo
         storeDirectoryExists <- IO.doesDirectoryExist (T.unpack packageStorePath)
         arhiveFileExists <- runResourceT $ IO.resourceExists env archiveFile
         when (not storeDirectoryExists && arhiveFileExists) $ do
-          IO.createDirectoryIfMissing True (T.unpack packageStorePath)
           runResAws env $ do
             maybeArchiveFileContents <- IO.readResource env archiveFile
             case maybeArchiveFileContents of
@@ -88,6 +96,5 @@ optsSyncFromArchive = Z.SyncFromArchiveOptions
       <>  value (homeDirectory <> "/.cabal/archive")
       )
 
-
 cmdSyncFromArchive :: Mod CommandFields (IO ())
-cmdSyncFromArchive = command "sync-from-s3"  $ flip info idm $ runSyncFromArchive <$> optsSyncFromArchive
+cmdSyncFromArchive = command "sync-from-archive"  $ flip info idm $ runSyncFromArchive <$> optsSyncFromArchive
