@@ -19,7 +19,7 @@ import Data.Maybe
 import Data.Semigroup                       ((<>))
 import HaskellWorks.Ci.Assist.Core
 import HaskellWorks.Ci.Assist.PackageConfig (unTemplateConfig)
-import HaskellWorks.Ci.Assist.Tar           (mapFileEntriesWith)
+import HaskellWorks.Ci.Assist.Tar           (mapEntriesWith)
 import Options.Applicative                  hiding (columns)
 
 import qualified App.Commands.Options.Types     as Z
@@ -68,7 +68,7 @@ runSyncFromArchive opts = do
                 let entries = F.read (F.decompress archiveFileContents)
                 let entries' = case confPath pInfo of
                                   Nothing   -> entries
-                                  Just conf -> mapFileEntriesWith (== T.unpack conf) (unTemplateConfig (T.unpack baseDir)) entries
+                                  Just conf -> mapEntriesWith (== T.unpack conf) (unTemplateConfig (T.unpack baseDir)) entries
 
                 liftIO $ F.unpack (T.unpack baseDir) entries'
               Nothing -> do
