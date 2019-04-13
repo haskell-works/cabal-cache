@@ -36,7 +36,9 @@ import qualified HaskellWorks.Ci.Assist.IO.Console as CIO
 import qualified HaskellWorks.Ci.Assist.IO.Lazy    as IO
 import qualified HaskellWorks.Ci.Assist.Types      as Z
 import qualified System.Directory                  as IO
+import qualified System.Exit                       as IO
 import qualified System.IO                         as IO
+import qualified System.Process                    as IO
 import qualified UnliftIO.Async                    as IO
 
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
@@ -57,10 +59,28 @@ runSyncToArchive opts = do
       let baseDir = opts ^. the @"storePath"
       packages <- getPackages baseDir planJson
 
+      let storeCompilerPath           = baseDir <> "/" <> (planJson ^. the @"compilerId")
+      let storeCompilerPackageDbPath  = storeCompilerPath <> "/package.db"
+
+      storeCompilerPackageDbPathExists <- IO.doesDirectoryExist (T.unpack storeCompilerPackageDbPath)
+
+      unless storeCompilerPackageDbPathExists $ do
+        CIO.putStrLn "Package DB missing.  Creating Package DB"
+        hGhcPkg <- IO.spawnProcess "ghc-pkg" ["init", T.unpack storeCompilerPackageDbPath]
+
+        exitCodeGhcPkg <- IO.waitForProcess hGhcPkg
+        case exitCodeGhcPkg of
+          IO.ExitFailure _ -> do
+            CIO.hPutStrLn IO.stderr "ERROR: Failed to create Package DB"
+            IO.exitWith (IO.ExitFailure 1)
+          _ -> return ()
+
       IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> do
         let archiveFile = archiveUri <> "/" <> packageDir pInfo <> ".tar.gz"
         let packageStorePath = baseDir <> "/" <> packageDir pInfo
         packageStorePathExists <- IO.doesDirectoryExist (T.unpack packageStorePath)
+
+
         archiveFileExists <- runResourceT $ IO.resourceExists envAws archiveFile
         when (not archiveFileExists && packageStorePathExists) $ do
           CIO.putStrLn $ "Creating " <> archiveFile
