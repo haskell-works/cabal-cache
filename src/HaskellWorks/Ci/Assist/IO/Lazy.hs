@@ -6,6 +6,7 @@ module HaskellWorks.Ci.Assist.IO.Lazy
   , resourceExists
   , headS3Uri
   , writeResource
+  , createLocalDirectoryIfMissing
   ) where
 
 import Antiope.Core
@@ -20,18 +21,19 @@ import Data.Text                    (Text)
 import Network.AWS                  (MonadAWS, chunkedFile)
 import Network.AWS.Data.Body        (_streamBody)
 
-import qualified Antiope.S3.Lazy           as AWS
-import qualified Antiope.S3.Types          as AWS
-import qualified Data.ByteString.Lazy      as LBS
-import qualified Data.Text                 as T
-import qualified Data.Text.IO              as T
-import qualified Network.AWS               as AWS
-import qualified Network.AWS.Data          as AWS
-import qualified Network.AWS.S3.HeadObject as AWS
-import qualified Network.AWS.S3.PutObject  as AWS
-import qualified Network.HTTP.Types        as HTTP
-import qualified System.Directory          as IO
-import qualified System.IO                 as IO
+import qualified Antiope.S3.Lazy                   as AWS
+import qualified Antiope.S3.Types                  as AWS
+import qualified Data.ByteString.Lazy              as LBS
+import qualified Data.Text                         as T
+import qualified Data.Text.IO                      as T
+import qualified HaskellWorks.Ci.Assist.IO.Console as CIO
+import qualified Network.AWS                       as AWS
+import qualified Network.AWS.Data                  as AWS
+import qualified Network.AWS.S3.HeadObject         as AWS
+import qualified Network.AWS.S3.PutObject          as AWS
+import qualified Network.HTTP.Types                as HTTP
+import qualified System.Directory                  as IO
+import qualified System.IO                         as IO
 
 {-# ANN module ("HLint: ignore Redundant do"        :: String) #-}
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
@@ -70,3 +72,10 @@ writeResource :: MonadUnliftIO m => AWS.Env -> Text -> LBS.ByteString -> m ()
 writeResource envAws resourceUri lbs = case AWS.fromText resourceUri of
   Right s3Uri -> uploadeToS3 envAws s3Uri lbs
   Left _      -> liftIO $ LBS.writeFile (T.unpack resourceUri) lbs
+
+createLocalDirectoryIfMissing :: (MonadCatch m, MonadIO m) => Text -> m ()
+createLocalDirectoryIfMissing resourceUri = case AWS.fromText resourceUri of
+  Right (s3Uri :: AWS.S3Uri) -> liftIO $ CIO.putStrLn "??" >> return ()
+  Left x                     -> liftIO $ do
+    CIO.putStrLn $ "ZZ: " <> resourceUri
+    IO.createDirectoryIfMissing True (T.unpack resourceUri)

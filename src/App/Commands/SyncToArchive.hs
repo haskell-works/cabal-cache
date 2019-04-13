@@ -55,8 +55,8 @@ runSyncToArchive opts = do
   case A.eitherDecode lbs of
     Right (planJson :: Z.PlanJson) -> do
       envAws <- mkEnv (opts ^. the @"region") logger
-      let archivePath = homeDirectory <> "/.cabal/archive/" <> (planJson ^. the @"compilerId")
-      IO.createDirectoryIfMissing True (T.unpack archivePath)
+      let archiveCompilerUri = archiveUri <> "/" <> (planJson ^. the @"compilerId")
+      IO.createLocalDirectoryIfMissing archiveCompilerUri
       let baseDir = opts ^. the @"storePath"
       packages <- getPackages baseDir planJson
 
