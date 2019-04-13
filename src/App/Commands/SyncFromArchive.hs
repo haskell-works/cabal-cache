@@ -78,6 +78,19 @@ runSyncFromArchive opts = do
       IO.createDirectoryIfMissing True (T.unpack storeCompilerPath)
       IO.createDirectoryIfMissing True (T.unpack storeCompilerLibPath)
 
+      storeCompilerPackageDbPathExists <- IO.doesDirectoryExist (T.unpack storeCompilerPackageDbPath)
+
+      unless storeCompilerPackageDbPathExists $ do
+        CIO.putStrLn "Package DB missing.  Creating Package DB"
+        hGhcPkg <- IO.spawnProcess "ghc-pkg" ["init", T.unpack storeCompilerPackageDbPath]
+
+        exitCodeGhcPkg <- IO.waitForProcess hGhcPkg
+        case exitCodeGhcPkg of
+          IO.ExitFailure _ -> do
+            CIO.hPutStrLn IO.stderr "ERROR: Failed to create Package DB"
+            IO.exitWith (IO.ExitFailure 1)
+          _ -> return ()
+
       packages <- getPackages baseDir planJson
 
       IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> do
