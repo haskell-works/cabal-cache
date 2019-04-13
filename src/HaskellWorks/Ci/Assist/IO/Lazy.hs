@@ -75,7 +75,5 @@ writeResource envAws resourceUri lbs = case AWS.fromText resourceUri of
 
 createLocalDirectoryIfMissing :: (MonadCatch m, MonadIO m) => Text -> m ()
 createLocalDirectoryIfMissing resourceUri = case AWS.fromText resourceUri of
-  Right (s3Uri :: AWS.S3Uri) -> liftIO $ CIO.putStrLn "??" >> return ()
-  Left x                     -> liftIO $ do
-    CIO.putStrLn $ "ZZ: " <> resourceUri
-    IO.createDirectoryIfMissing True (T.unpack resourceUri)
+  Right (s3Uri :: AWS.S3Uri) -> return ()
+  Left x                     -> liftIO $ IO.createDirectoryIfMissing True (T.unpack resourceUri)
