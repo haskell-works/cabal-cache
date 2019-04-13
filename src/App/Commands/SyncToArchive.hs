@@ -17,6 +17,7 @@ import Data.Semigroup                       ((<>))
 import HaskellWorks.Ci.Assist.Core
 import HaskellWorks.Ci.Assist.Options
 import HaskellWorks.Ci.Assist.PackageConfig (templateConfig)
+import HaskellWorks.Ci.Assist.Show
 import HaskellWorks.Ci.Assist.Tar           (updateEntryWith)
 import Options.Applicative                  hiding (columns)
 import System.FilePath                      ((</>))
@@ -64,6 +65,8 @@ runSyncToArchive opts = do
 
       storeCompilerPackageDbPathExists <- IO.doesDirectoryExist (T.unpack storeCompilerPackageDbPath)
 
+      CIO.putStrLn "Checking for Package DB"
+
       unless storeCompilerPackageDbPathExists $ do
         CIO.putStrLn "Package DB missing.  Creating Package DB"
         hGhcPkg <- IO.spawnProcess "ghc-pkg" ["init", T.unpack storeCompilerPackageDbPath]
@@ -75,6 +78,8 @@ runSyncToArchive opts = do
             IO.exitWith (IO.ExitFailure 1)
           _ -> return ()
 
+      CIO.putStrLn $ "Syncing " <> tshow (length packages) <> " packages"
+
       IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> do
         let archiveFile = archiveUri <> "/" <> packageDir pInfo <> ".tar.gz"
         let packageStorePath = baseDir <> "/" <> packageDir pInfo
@@ -82,6 +87,7 @@ runSyncToArchive opts = do
 
 
         archiveFileExists <- runResourceT $ IO.resourceExists envAws archiveFile
+
         when (not archiveFileExists && packageStorePathExists) $ do
           CIO.putStrLn $ "Creating " <> archiveFile
           entries <- F.pack (T.unpack baseDir) (relativePaths pInfo)

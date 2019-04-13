@@ -94,6 +94,7 @@ library
       HaskellWorks.Ci.Assist.IO.Lazy
       HaskellWorks.Ci.Assist.Options
       HaskellWorks.Ci.Assist.PackageConfig
+      HaskellWorks.Ci.Assist.Show
       HaskellWorks.Ci.Assist.Tar
       HaskellWorks.Ci.Assist.Text
       HaskellWorks.Ci.Assist.Types
