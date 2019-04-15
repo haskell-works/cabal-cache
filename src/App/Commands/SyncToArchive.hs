@@ -76,7 +76,7 @@ runSyncToArchive opts = do
                           Nothing   -> entries
                           Just conf -> updateEntryWith (== conf) (templateConfig baseDir) <$> entries
 
-          IO.writeResource envAws archiveFile . F.compress . F.write $ entries
+          IO.writeResource envAws archiveFile . F.compress . F.write $ entries'
 
     Left errorMessage -> do
       CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> T.pack errorMessage
