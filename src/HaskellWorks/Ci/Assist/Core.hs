@@ -7,6 +7,8 @@
 {-# LANGUAGE TypeApplications      #-}
 module HaskellWorks.Ci.Assist.Core
   ( PackageInfo(..)
+  , Tagged(..)
+  , Presence(..)
   , getPackages
   , relativePaths
   , loadPlan
@@ -36,17 +38,24 @@ type PackageDir = FilePath
 type ConfPath   = FilePath
 type Library    = FilePath
 
+data Presence   = Present | Absent deriving (Eq, Show, NFData, Generic)
+
+data Tagged a t = Tagged
+  { value :: a
+  , tag   :: t
+  } deriving (Eq, Show, Generic, NFData)
+
 data PackageInfo = PackageInfo
   { compilerId :: CompilerId
   , packageId  :: PackageId
   , packageDir :: PackageDir
-  , confPath   :: Maybe ConfPath
+  , confPath   :: Tagged ConfPath Presence
   , libs       :: [Library]
   } deriving (Show, Eq, Generic, NFData)
 
 relativePaths :: PackageInfo -> [FilePath]
 relativePaths pInfo = mempty
-  <>  maybeToList (pInfo ^. the @"confPath")
+  <>  ([pInfo ^. the @"confPath"] & filter ((== Present) . (^. the @"tag")) <&> (^. the @"value"))
   <>  [packageDir pInfo]
   <>  (pInfo ^. the @"libs")
 
@@ -80,7 +89,7 @@ mkPackageInfo basePath cid pkg = do
     { compilerId  = cid
     , packageId   = pid
     , packageDir  = T.unpack cid </> T.unpack pid
-    , confPath    = bool Nothing (Just relativeConfPath) absoluteConfPathExists
+    , confPath    = Tagged relativeConfPath (bool Absent Present absoluteConfPathExists)
     , libs        = libFiles
     }
 

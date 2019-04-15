@@ -17,7 +17,7 @@ import Control.Monad.IO.Class               (liftIO)
 import Control.Monad.Trans.Resource         (runResourceT)
 import Data.Generics.Product.Any            (the)
 import Data.Semigroup                       ((<>))
-import HaskellWorks.Ci.Assist.Core          (PackageInfo (..), getPackages, loadPlan)
+import HaskellWorks.Ci.Assist.Core          (PackageInfo (..), Presence (..), Tagged (..), getPackages, loadPlan)
 import HaskellWorks.Ci.Assist.Location      ((<.>), (</>))
 import HaskellWorks.Ci.Assist.PackageConfig (unTemplateConfig)
 import HaskellWorks.Ci.Assist.Tar           (mapEntriesWith)
@@ -82,8 +82,8 @@ runSyncFromArchive opts = do
                 CIO.putStrLn $ "Extracting " <> toText archiveFile
                 let entries = F.read (F.decompress archiveFileContents)
                 let entries' = case confPath pInfo of
-                                  Nothing   -> entries
-                                  Just conf -> mapEntriesWith (== conf) (unTemplateConfig baseDir) entries
+                                Tagged conf Present -> mapEntriesWith (== conf) (unTemplateConfig baseDir) entries
+                                Tagged _ _          -> entries
 
                 liftIO $ F.unpack baseDir entries'
               Nothing -> do

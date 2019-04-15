@@ -16,7 +16,7 @@ import Control.Monad                        (unless, when)
 import Control.Monad.Trans.Resource         (runResourceT)
 import Data.Generics.Product.Any            (the)
 import Data.Semigroup                       ((<>))
-import HaskellWorks.Ci.Assist.Core          (PackageInfo (..), getPackages, loadPlan, relativePaths)
+import HaskellWorks.Ci.Assist.Core          (PackageInfo (..), Presence (..), Tagged (..), getPackages, loadPlan, relativePaths)
 import HaskellWorks.Ci.Assist.Location      ((<.>), (</>))
 import HaskellWorks.Ci.Assist.PackageConfig (templateConfig)
 import HaskellWorks.Ci.Assist.Show
@@ -73,8 +73,8 @@ runSyncToArchive opts = do
           entries <- F.pack baseDir (relativePaths pInfo)
 
           let entries' = case confPath pInfo of
-                          Nothing   -> entries
-                          Just conf -> updateEntryWith (== conf) (templateConfig baseDir) <$> entries
+                          Tagged conf Present -> updateEntryWith (== conf) (templateConfig baseDir) <$> entries
+                          _                   -> entries
 
           IO.writeResource envAws archiveFile . F.compress . F.write $ entries'
 
