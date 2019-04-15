@@ -2,6 +2,7 @@ module App.Commands where
 
 import App.Commands.SyncFromArchive
 import App.Commands.SyncToArchive
+import App.Commands.Version
 import Data.Semigroup               ((<>))
 import Options.Applicative
 
@@ -13,3 +14,4 @@ commandsGeneral = subparser $ mempty
   <>  commandGroup "Commands:"
   <>  cmdSyncFromArchive
   <>  cmdSyncToArchive
+  <>  cmdVersion

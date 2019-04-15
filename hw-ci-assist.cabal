@@ -89,6 +89,7 @@ library
       App.Commands.Options.Types
       App.Commands.SyncFromArchive
       App.Commands.SyncToArchive
+      App.Commands.Version
       App.Static
       HaskellWorks.Ci.Assist.Core
       HaskellWorks.Ci.Assist.IO.Console
@@ -101,6 +102,10 @@ library
       HaskellWorks.Ci.Assist.Tar
       HaskellWorks.Ci.Assist.Text
       HaskellWorks.Ci.Assist.Types
+  other-modules:
+      Paths_hw_ci_assist
+  autogen-modules:
+      Paths_hw_ci_assist
 
   hs-source-dirs:       src
 

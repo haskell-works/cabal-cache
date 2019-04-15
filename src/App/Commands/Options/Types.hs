@@ -23,3 +23,5 @@ data SyncFromArchiveOptions = SyncFromArchiveOptions
   , storePath  :: FilePath
   , threads    :: Int
   } deriving (Eq, Show, Generic)
+
+data VersionOptions = VersionOptions deriving (Eq, Show, Generic)

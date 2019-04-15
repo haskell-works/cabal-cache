@@ -3,7 +3,7 @@ module App.Commands.Options.Parser
 where
 
 import Antiope.Core                    (FromText, Region (..), fromText)
-import App.Commands.Options.Types      (SyncFromArchiveOptions (..), SyncToArchiveOptions (..))
+import App.Commands.Options.Types      (SyncFromArchiveOptions (..), SyncToArchiveOptions (..), VersionOptions (..))
 import App.Static                      (homeDirectory)
 import HaskellWorks.Ci.Assist.Location (Location (..), toLocation, (</>))
 import Options.Applicative
@@ -63,6 +63,9 @@ optsSyncToArchive = SyncToArchiveOptions
       <>  metavar "NUM_THREADS"
       <>  value 4
       )
+
+optsVersion :: Parser VersionOptions
+optsVersion = pure VersionOptions
 
 text :: FromText a => ReadM a
 text = eitherReader (fromText . Text.pack)
