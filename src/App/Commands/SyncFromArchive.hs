@@ -82,8 +82,7 @@ runSyncFromArchive opts = do
                 CIO.putStrLn $ "Extracting " <> toText archiveFile
                 let entries = F.read (F.decompress archiveFileContents)
                 let entries' = case confPath pInfo of
-                                Tagged conf Present -> mapEntriesWith (== conf) (unTemplateConfig baseDir) entries
-                                Tagged _ _          -> entries
+                                Tagged conf _ -> mapEntriesWith (== conf) (unTemplateConfig baseDir) entries
 
                 liftIO $ F.unpack baseDir entries'
               Nothing -> do
