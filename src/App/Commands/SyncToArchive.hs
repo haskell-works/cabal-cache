@@ -33,6 +33,7 @@ import qualified HaskellWorks.Ci.Assist.IO.Console as CIO
 import qualified HaskellWorks.Ci.Assist.IO.Lazy    as IO
 import qualified HaskellWorks.Ci.Assist.Types      as Z
 import qualified System.IO                         as IO
+import qualified System.IO.Temp                    as IO
 import qualified UnliftIO.Async                    as IO
 
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
@@ -62,21 +63,24 @@ runSyncToArchive opts = do
 
       CIO.putStrLn $ "Syncing " <> tshow (length packages) <> " packages"
 
-      IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> do
-        let archiveFile = archiveUri </> T.pack (packageDir pInfo) <.> ".tar.gz"
-        let packageStorePath = baseDir </> packageDir pInfo
-        packageStorePathExists <- doesDirectoryExist packageStorePath
-        archiveFileExists <- runResourceT $ IO.resourceExists envAws archiveFile
+      IO.withSystemTempDirectory "hw-ci-assist" $ \tempPath -> do
+        CIO.putStrLn $ "Temp path: " <> tshow tempPath
 
-        when (not archiveFileExists && packageStorePathExists) $ do
-          CIO.putStrLn $ "Creating " <> toText archiveFile
-          entries <- F.pack baseDir (relativePaths pInfo)
+        IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> do
+          let archiveFile = archiveUri </> T.pack (packageDir pInfo) <.> ".tar.gz"
+          let packageStorePath = baseDir </> packageDir pInfo
+          packageStorePathExists <- doesDirectoryExist packageStorePath
+          archiveFileExists <- runResourceT $ IO.resourceExists envAws archiveFile
 
-          let entries' = case confPath pInfo of
-                          Tagged conf Present -> updateEntryWith (== conf) (templateConfig baseDir) <$> entries
-                          _                   -> entries
+          when (not archiveFileExists && packageStorePathExists) $ do
+            CIO.putStrLn $ "Creating " <> toText archiveFile
+            entries <- F.pack baseDir (relativePaths pInfo)
 
-          IO.writeResource envAws archiveFile . F.compress . F.write $ entries'
+            let entries' = case confPath pInfo of
+                            Tagged conf Present -> updateEntryWith (== conf) (templateConfig baseDir) <$> entries
+                            _                   -> entries
+
+            IO.writeResource envAws archiveFile . F.compress . F.write $ entries'
 
     Left errorMessage -> do
       CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> T.pack errorMessage
