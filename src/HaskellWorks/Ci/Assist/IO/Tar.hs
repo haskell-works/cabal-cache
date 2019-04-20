@@ -7,6 +7,7 @@
 module HaskellWorks.Ci.Assist.IO.Tar
   ( TarGroup(..)
   , createTar
+  , extractTar
   ) where
 
 import Control.DeepSeq             (NFData)
@@ -30,8 +31,16 @@ data TarGroup = TarGroup
 
 createTar :: FilePath -> [TarGroup] -> ExceptT String IO ()
 createTar tarFile groups = do
-  let args = ["zcf", tarFile] <> foldMap tarGroupToArgs groups
+  let args = ["-zcf", tarFile] <> foldMap tarGroupToArgs groups
   process <- liftIO $ IO.spawnProcess "tar" args
+  exitCode <- liftIO $ IO.waitForProcess process
+  case exitCode of
+    IO.ExitSuccess   -> return ()
+    IO.ExitFailure n -> throwError ""
+
+extractTar :: FilePath -> FilePath -> ExceptT String IO ()
+extractTar tarFile targetPath = do
+  process <- liftIO $ IO.spawnProcess "tar" ["-C", targetPath, "-zxf", tarFile]
   exitCode <- liftIO $ IO.waitForProcess process
   case exitCode of
     IO.ExitSuccess   -> return ()
