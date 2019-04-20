@@ -91,29 +91,30 @@ runSyncFromArchive opts = do
           CIO.putStrLn $ "Extracting: " <> T.pack archiveBaseName
           let packageStorePath = baseDir </> packageDir pInfo
           storeDirectoryExists <- doesDirectoryExist packageStorePath
-          arhiveFileExists <- runResourceT $ IO.resourceExists env archiveFile
-          when (not storeDirectoryExists && arhiveFileExists) $ do
-            runResAws env $ do
-              maybeArchiveFileContents <- IO.readResource env archiveFile
+          unless storeDirectoryExists $ do
+            arhiveFileExists <- runResourceT $ IO.resourceExists env archiveFile
+            when arhiveFileExists $ do
+              runResAws env $ do
+                maybeArchiveFileContents <- IO.readResource env archiveFile
 
-              case maybeArchiveFileContents of
-                Just archiveFileContents -> do
-                  let tempArchiveFile = tempPath </> archiveBaseName :: FilePath
-                  liftIO $ LBS.writeFile tempArchiveFile archiveFileContents
-                  liftIO $ runExceptT $ IO.extractTar tempArchiveFile storePath
+                case maybeArchiveFileContents of
+                  Just archiveFileContents -> do
+                    let tempArchiveFile = tempPath </> archiveBaseName :: FilePath
+                    liftIO $ LBS.writeFile tempArchiveFile archiveFileContents
+                    liftIO $ runExceptT $ IO.extractTar tempArchiveFile storePath
 
-                  case confPath pInfo of
-                    Tagged conf _ -> do
-                      let theConfPath = storePath </> conf
-                      let tempConfPath = tempPath </> conf
-                      confPathExists <- liftIO $ IO.doesFileExist theConfPath
-                      when confPathExists $ do
-                        confContents <- liftIO $ LBS.readFile theConfPath
-                        liftIO $ LBS.writeFile tempConfPath (unTemplateConfig baseDir confContents)
-                        liftIO $ IO.renamePath tempConfPath theConfPath
+                    case confPath pInfo of
+                      Tagged conf _ -> do
+                        let theConfPath = storePath </> conf
+                        let tempConfPath = tempPath </> conf
+                        confPathExists <- liftIO $ IO.doesFileExist theConfPath
+                        when confPathExists $ do
+                          confContents <- liftIO $ LBS.readFile theConfPath
+                          liftIO $ LBS.writeFile tempConfPath (unTemplateConfig baseDir confContents)
+                          liftIO $ IO.renamePath tempConfPath theConfPath
 
-                Nothing -> do
-                  CIO.putStrLn $ "Archive unavailable: " <> toText archiveFile
+                  Nothing -> do
+                    CIO.putStrLn $ "Archive unavailable: " <> toText archiveFile
 
       CIO.putStrLn "Recaching package database"
       GhcPkg.recache storeCompilerPackageDbPath
