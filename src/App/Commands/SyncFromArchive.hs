@@ -43,8 +43,13 @@ import qualified UnliftIO.Async                    as IO
 
 runSyncFromArchive :: Z.SyncFromArchiveOptions -> IO ()
 runSyncFromArchive opts = do
-  let archiveUri = opts ^. the @"archiveUri"
-  CIO.putStrLn $ "Archive URI: " <> toText archiveUri
+  let storePath   = opts ^. the @"storePath"
+  let archiveUri  = opts ^. the @"archiveUri"
+  let threads     = opts ^. the @"threads"
+
+  CIO.putStrLn $ "Store path: "   <> toText storePath
+  CIO.putStrLn $ "Archive URI: "  <> toText archiveUri
+  CIO.putStrLn $ "Threads: "      <> tshow threads
 
   GhcPkg.testAvailability
 
@@ -74,7 +79,7 @@ runSyncFromArchive opts = do
       IO.withSystemTempDirectory "hw-ci-assist" $ \tempPath -> do
         CIO.putStrLn $ "Temp path: " <> tshow tempPath
 
-        IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> do
+        IO.pooledForConcurrentlyN_ threads packages $ \pInfo -> do
           let archiveFile = archiveUri </> T.pack (packageDir pInfo) <.> ".tar.gz"
           let packageStorePath = baseDir </> packageDir pInfo
           storeDirectoryExists <- doesDirectoryExist packageStorePath

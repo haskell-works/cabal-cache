@@ -41,7 +41,14 @@ import qualified UnliftIO.Async                    as IO
 
 runSyncToArchive :: Z.SyncToArchiveOptions -> IO ()
 runSyncToArchive opts = do
-  let archiveUri = opts ^. the @"archiveUri"
+  let storePath   = opts ^. the @"storePath"
+  let archiveUri  = opts ^. the @"archiveUri"
+  let threads     = opts ^. the @"threads"
+
+  CIO.putStrLn $ "Store path: "   <> toText storePath
+  CIO.putStrLn $ "Archive URI: "  <> toText archiveUri
+  CIO.putStrLn $ "Threads: "      <> tshow threads
+
   mbPlan <- loadPlan
   case mbPlan of
     Right planJson -> do
