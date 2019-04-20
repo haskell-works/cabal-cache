@@ -11,6 +11,7 @@ module HaskellWorks.Ci.Assist.Core
   , Presence(..)
   , getPackages
   , relativePaths
+  , relativePaths2
   , loadPlan
   ) where
 
@@ -26,11 +27,12 @@ import Data.Text                 (Text)
 import GHC.Generics              (Generic)
 import System.FilePath           ((<.>), (</>))
 
-import qualified Data.ByteString.Lazy         as LBS
-import qualified Data.List                    as List
-import qualified Data.Text                    as T
-import qualified HaskellWorks.Ci.Assist.Types as Z
-import qualified System.Directory             as IO
+import qualified Data.ByteString.Lazy          as LBS
+import qualified Data.List                     as List
+import qualified Data.Text                     as T
+import qualified HaskellWorks.Ci.Assist.IO.Tar as IO
+import qualified HaskellWorks.Ci.Assist.Types  as Z
+import qualified System.Directory              as IO
 
 type CompilerId = Text
 type PackageId  = Text
@@ -52,6 +54,15 @@ data PackageInfo = PackageInfo
   , confPath   :: Tagged ConfPath Presence
   , libs       :: [Library]
   } deriving (Show, Eq, Generic, NFData)
+
+relativePaths2 :: FilePath -> FilePath -> PackageInfo -> [IO.TarGroup]
+relativePaths2 basePath tmpPath pInfo =
+  [ IO.TarGroup basePath $ mempty
+      <> (pInfo ^. the @"libs")
+      <> [packageDir pInfo]
+  , IO.TarGroup tmpPath $ mempty
+      <> ([pInfo ^. the @"confPath"] & filter ((== Present) . (^. the @"tag")) <&> (^. the @"value"))
+  ]
 
 relativePaths :: PackageInfo -> [FilePath]
 relativePaths pInfo = mempty
