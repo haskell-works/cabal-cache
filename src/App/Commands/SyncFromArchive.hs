@@ -12,11 +12,13 @@ import Antiope.Env                          (LogLevel, mkEnv)
 import App.Commands.Options.Parser          (optsSyncFromArchive)
 import App.Static                           (homeDirectory)
 import Control.Lens                         hiding ((<.>))
-import Control.Monad                        (unless, when)
+import Control.Monad                        (unless, void, when)
+import Control.Monad.Except
 import Control.Monad.IO.Class               (liftIO)
 import Control.Monad.Trans.Resource         (runResourceT)
 import Data.Generics.Product.Any            (the)
 import Data.Semigroup                       ((<>))
+import Data.Text                            (Text)
 import HaskellWorks.Ci.Assist.Core          (PackageInfo (..), Presence (..), Tagged (..), getPackages, loadPlan)
 import HaskellWorks.Ci.Assist.Location      ((<.>), (</>))
 import HaskellWorks.Ci.Assist.PackageConfig (unTemplateConfig)
@@ -29,11 +31,14 @@ import System.Directory                     (createDirectoryIfMissing, doesDirec
 import qualified App.Commands.Options.Types        as Z
 import qualified Codec.Archive.Tar                 as F
 import qualified Codec.Compression.GZip            as F
+import qualified Data.ByteString.Lazy              as LBS
 import qualified Data.Text                         as T
 import qualified HaskellWorks.Ci.Assist.GhcPkg     as GhcPkg
 import qualified HaskellWorks.Ci.Assist.IO.Console as CIO
 import qualified HaskellWorks.Ci.Assist.IO.Lazy    as IO
+import qualified HaskellWorks.Ci.Assist.IO.Tar     as IO
 import qualified HaskellWorks.Ci.Assist.Types      as Z
+import qualified System.Directory                  as IO
 import qualified System.IO                         as IO
 import qualified System.IO.Temp                    as IO
 import qualified UnliftIO.Async                    as IO
@@ -57,9 +62,10 @@ runSyncFromArchive opts = do
   case mbPlan of
     Right planJson -> do
       env <- mkEnv (opts ^. the @"region") (\_ _ -> pure ())
-      let archivePath                 = archiveUri </> (planJson ^. the @"compilerId")
+      let compilerId                  = planJson ^. the @"compilerId"
+      let archivePath                 = archiveUri </> compilerId
       let baseDir                     = opts ^. the @"storePath"
-      let storeCompilerPath           = baseDir </> (planJson ^. the @"compilerId" . to T.unpack)
+      let storeCompilerPath           = baseDir </> T.unpack compilerId
       let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"
       let storeCompilerLibPath        = storeCompilerPath </> "lib"
 
@@ -77,26 +83,37 @@ runSyncFromArchive opts = do
       packages <- getPackages baseDir planJson
 
       IO.withSystemTempDirectory "hw-ci-assist" $ \tempPath -> do
-        CIO.putStrLn $ "Temp path: " <> tshow tempPath
+        IO.createDirectoryIfMissing True (tempPath </> T.unpack compilerId </> "package.db")
 
         IO.pooledForConcurrentlyN_ threads packages $ \pInfo -> do
-          let archiveFile = archiveUri </> T.pack (packageDir pInfo) <.> ".tar.gz"
+          let archiveBaseName = packageDir pInfo <.> ".tar.gz"
+          let archiveFile = archiveUri </> T.pack archiveBaseName
+          CIO.putStrLn $ "Extracting: " <> T.pack archiveBaseName
           let packageStorePath = baseDir </> packageDir pInfo
           storeDirectoryExists <- doesDirectoryExist packageStorePath
           arhiveFileExists <- runResourceT $ IO.resourceExists env archiveFile
           when (not storeDirectoryExists && arhiveFileExists) $ do
             runResAws env $ do
               maybeArchiveFileContents <- IO.readResource env archiveFile
+
               case maybeArchiveFileContents of
                 Just archiveFileContents -> do
-                  CIO.putStrLn $ "Extracting " <> toText archiveFile
-                  let entries = F.read (F.decompress archiveFileContents)
-                  let entries' = case confPath pInfo of
-                                  Tagged conf _ -> mapEntriesWith (== conf) (unTemplateConfig baseDir) entries
+                  let tempArchiveFile = tempPath </> archiveBaseName :: FilePath
+                  liftIO $ LBS.writeFile tempArchiveFile archiveFileContents
+                  liftIO $ runExceptT $ IO.extractTar tempArchiveFile storePath
 
-                  liftIO $ F.unpack baseDir entries'
+                  case confPath pInfo of
+                    Tagged conf _ -> do
+                      let theConfPath = storePath </> conf
+                      let tempConfPath = tempPath </> conf
+                      confPathExists <- liftIO $ IO.doesFileExist theConfPath
+                      when confPathExists $ do
+                        confContents <- liftIO $ LBS.readFile theConfPath
+                        liftIO $ LBS.writeFile tempConfPath (unTemplateConfig baseDir confContents)
+                        liftIO $ IO.renamePath tempConfPath theConfPath
+
                 Nothing -> do
-                  CIO.putStrLn $ "Archive unavilable: " <> toText archiveFile
+                  CIO.putStrLn $ "Archive unavailable: " <> toText archiveFile
 
       CIO.putStrLn "Recaching package database"
       GhcPkg.recache storeCompilerPackageDbPath
