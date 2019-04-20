@@ -1,7 +1,7 @@
 cabal-version:        2.2
 
 name:                   hw-ci-assist
-version:                0.2.0.0
+version:                0.2.0.1
 synopsis:               CI Assistant for Haskell projects
 description:            CI Assistant for Haskell projects.  Implements package caching.
 homepage:               https://github.com/haskell-works/hw-ci-assist
