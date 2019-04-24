@@ -88,12 +88,12 @@ runSyncFromArchive opts = do
         IO.pooledForConcurrentlyN_ threads packages $ \pInfo -> do
           let archiveBaseName = packageDir pInfo <.> ".tar.gz"
           let archiveFile = archiveUri </> T.pack archiveBaseName
-          CIO.putStrLn $ "Extracting: " <> T.pack archiveBaseName
           let packageStorePath = baseDir </> packageDir pInfo
           storeDirectoryExists <- doesDirectoryExist packageStorePath
           unless storeDirectoryExists $ do
             arhiveFileExists <- runResourceT $ IO.resourceExists env archiveFile
             when arhiveFileExists $ do
+              CIO.putStrLn $ "Extracting: " <> T.pack archiveBaseName
               runResAws env $ do
                 maybeArchiveFileContents <- IO.readResource env archiveFile
 
