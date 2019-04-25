@@ -30,8 +30,8 @@ workflows:
             branches:
               only: master
 
-      # - hackage/upload:
-      #     context: haskell-ci
-      #     publish: true
-      #     requires:
-      #       - GitHub Release
+      - hackage/upload:
+          context: haskell-ci
+          publish: true
+          requires:
+            - GitHub Release
