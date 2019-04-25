@@ -27,7 +27,7 @@ brew update
 brew install cabal-cache
 ```
 
-## Exmample usage
+## Example usage
 
 Syncing built packages with S3 requires you have an S3 bucket with AWS
 credentials stored in the `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environent variables.
