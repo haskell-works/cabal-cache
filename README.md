@@ -19,6 +19,10 @@ Several installation methods are available.
 git new-install cabal-cache
 ```
 
+### Ubuntu binaries
+
+Dowload Ubuntu binaries from https://github.com/haskell-works/cabal-cache/releases
+
 ### Using Homebrew on Mac OS X
 
 ```bash
@@ -33,7 +37,7 @@ Syncing built packages with S3 requires you have an S3 bucket with AWS
 credentials stored in the `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environent variables.
 You should also know the AWS region the bucket was created in.
 
-### Sync to S3
+### Sync to archive
 
 Change into your project directory.
 
@@ -41,10 +45,16 @@ Build the project with `cabal v2-build`.  This will ensure your dependencies are
 will product a `plan.json` file that is required for the `cabal-cache` tool to know which built
 packages to sync up.
 
-Run the following command.
+Run the following command to sync to S3.
 
 ```bash
-hw-ci-assist sync-from-archive --threads 16 --archive-uri s3://my-cabal-cache-bucket/archive --region Sydney
+cabal-cache sync-to-archive --threads 16 --archive-uri s3://my-cabal-cache-bucket/archive --region Sydney
+```
+
+Run the following command to sync to archive directory.
+
+```bash
+cabal-cache sync-to-archive --threads 16 --archive-uri archive --region Sydney
 ```
 
 ### Sync from S3
@@ -54,8 +64,15 @@ Change into your project directory.
 Build the project with `cabal v2-configure`.  This will product a `plan.json` file that is required
 for the `cabal-cache` tool to know which built packages to sync down.
 
-Run the following command.
+Run the following command to sync from S3.
 
 ```bash
-hw-ci-assist sync-from-archive --threads 16 --archive-uri s3://my-cabal-cache-bucket/archive --region Sydney
+cabal-cache sync-from-archive --threads 16 --archive-uri s3://my-cabal-cache-bucket/archive --region Sydney
 ```
+
+Run the following command to sync from archive directory.
+
+```bash
+cabal-cache sync-from-archive --threads 16 --archive-uri archive --region Sydney
+```
+
