@@ -1,10 +1,10 @@
 cabal-version:        2.2
 
-name:                   hw-ci-assist
+name:                   cabal-cache
 version:                0.2.0.1
 synopsis:               CI Assistant for Haskell projects
 description:            CI Assistant for Haskell projects.  Implements package caching.
-homepage:               https://github.com/haskell-works/hw-ci-assist
+homepage:               https://github.com/haskell-works/cabal-cache
 license:                BSD-3-Clause
 license-file:           LICENSE
 author:                 John Ky
@@ -15,7 +15,7 @@ extra-source-files:     CHANGELOG.md, README.md
 
 source-repository head
   type: git
-  location: https://github.com/haskell-works/hw-ci-assist
+  location: https://github.com/haskell-works/cabal-cache
 
 common base                 { build-depends: base                 >= 4.7        && < 5      }
 
@@ -85,6 +85,9 @@ library
           , time
           , unliftio
           , zlib
+  other-modules:        Paths_cabal_cache
+  autogen-modules:      Paths_cabal_cache
+  hs-source-dirs:       src
   exposed-modules:
       App.Commands
       App.Commands.Options.Parser
@@ -107,22 +110,16 @@ library
       HaskellWorks.Ci.Assist.Tar
       HaskellWorks.Ci.Assist.Text
       HaskellWorks.Ci.Assist.Types
-  other-modules:
-      Paths_hw_ci_assist
-  autogen-modules:
-      Paths_hw_ci_assist
 
-  hs-source-dirs:       src
-
-executable hw-ci-assist
+executable cabal-cache
   import:   base, config
           , optparse-applicative
-  build-depends:        hw-ci-assist
+  build-depends:        cabal-cache
   main-is:              Main.hs
   hs-source-dirs:       app
   ghc-options:          -threaded -rtsopts -with-rtsopts=-N
 
-test-suite hw-ci-assist-test
+test-suite cabal-cache-test
   import:   base, config
           , aeson
           , antiope-core
@@ -139,11 +136,11 @@ test-suite hw-ci-assist-test
           , text
   type:                 exitcode-stdio-1.0
   main-is:              Spec.hs
-  build-depends:        hw-ci-assist
+  build-depends:        cabal-cache
+  hs-source-dirs:       test
+  ghc-options:          -threaded -rtsopts -with-rtsopts=-N
+  build-tools:          hspec-discover
   other-modules:
       HaskellWorks.Assist.AwsSpec
       HaskellWorks.Assist.LocationSpec
       HaskellWorks.Assist.QuerySpec
-  hs-source-dirs:       test
-  ghc-options:          -threaded -rtsopts -with-rtsopts=-N
-  build-tools:          hspec-discover

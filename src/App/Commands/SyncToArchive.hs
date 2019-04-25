@@ -78,11 +78,7 @@ runSyncToArchive opts = do
 
       CIO.putStrLn $ "Syncing " <> tshow (length packages) <> " packages"
 
-      -- let tempPath' = "foo"
-      -- IO.createDirectoryIfMissing True tempPath'
-      -- tempPath <- IO.makeAbsolute tempPath'
-
-      IO.withSystemTempDirectory "hw-ci-assist" $ \tempPath -> do
+      IO.withSystemTempDirectory "cabal-cache" $ \tempPath -> do
         CIO.putStrLn $ "Temp path: " <> tshow tempPath
 
         CIO.putStrLn "Copying package.db directory for transformation"

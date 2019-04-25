@@ -82,7 +82,7 @@ runSyncFromArchive opts = do
 
       packages <- getPackages baseDir planJson
 
-      IO.withSystemTempDirectory "hw-ci-assist" $ \tempPath -> do
+      IO.withSystemTempDirectory "cabal-cache" $ \tempPath -> do
         IO.createDirectoryIfMissing True (tempPath </> T.unpack compilerId </> "package.db")
 
         IO.pooledForConcurrentlyN_ threads packages $ \pInfo -> do

@@ -15,7 +15,7 @@ import Data.Generics.Product.Any   (the)
 import Data.List
 import Data.Semigroup              ((<>))
 import Options.Applicative         hiding (columns)
-import Paths_hw_ci_assist
+import Paths_cabal_cache
 
 import qualified App.Commands.Options.Types        as Z
 import qualified Data.Text                         as T
@@ -27,11 +27,11 @@ import qualified HaskellWorks.Ci.Assist.IO.Console as CIO
 
 runVersion :: Z.VersionOptions -> IO ()
 runVersion _ = do
-  let V.Version {..} = Paths_hw_ci_assist.version
+  let V.Version {..} = Paths_cabal_cache.version
 
   let version = intercalate "." $ fmap show versionBranch
 
-  CIO.putStrLn $ "hw-ci-assist " <> T.pack version
+  CIO.putStrLn $ "cabal-cache " <> T.pack version
 
 cmdVersion :: Mod CommandFields (IO ())
 cmdVersion = command "version"  $ flip info idm $ runVersion <$> optsVersion

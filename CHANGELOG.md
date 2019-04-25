@@ -1,4 +1,4 @@
-# Revision history for hw-ci-assist
+# Revision history for cabal-cache
 
 ## 0.1.0.0 -- YYYY-mm-dd
 
