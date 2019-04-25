@@ -76,3 +76,12 @@ Run the following command to sync from archive directory.
 cabal-cache sync-from-archive --threads 16 --archive-uri archive --region Sydney
 ```
 
+## Caveats
+
+### Paths_$pgkname modules
+
+`Paths_$pkgname` modules have embedded within them the absolute path to the package in the cabal store
+which strictly means that packages are not relocatable.  It is recommended that you use a fixed cabal
+store path rather than the default `$HOME/.cabal/store` to avoid any potential issues.
+
+See https://github.com/haskell/cabal/issues/4097 for more information.
