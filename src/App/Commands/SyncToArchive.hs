@@ -16,7 +16,7 @@ import Control.Monad                        (unless, when)
 import Control.Monad.Except
 import Control.Monad.Trans.Resource         (runResourceT)
 import Data.Generics.Product.Any            (the)
-import Data.List                            (isSuffixOf)
+import Data.List                            (isSuffixOf, (\\))
 import Data.Semigroup                       ((<>))
 import HaskellWorks.Ci.Assist.Core          (PackageInfo (..), Presence (..), Tagged (..), getPackages, loadPlan, relativePaths, relativePaths2)
 import HaskellWorks.Ci.Assist.Location      ((<.>), (</>))
@@ -109,6 +109,7 @@ runSyncToArchive opts = do
           let archiveFile         = versionedArchiveUri </> T.pack archiveFileBasename
           let scopedArchiveFile   = versionedArchiveUri </> T.pack storePathHash </> T.pack archiveFileBasename
           let packageStorePath    = baseDir </> packageDir pInfo
+          let packageSharePath    = packageStorePath </> "share"
 
           archiveFileExists <- runResourceT $ IO.resourceExists envAws scopedArchiveFile
 
@@ -125,9 +126,9 @@ runSyncToArchive opts = do
 
               liftIO (LBS.readFile tempArchiveFile >>= IO.writeResource envAws scopedArchiveFile)
 
-              IO.copyResource envAws scopedArchiveFile archiveFile
+              shareEntries <- (\\ ["doc"]) <$> IO.listMaybeDirectory packageSharePath
 
-              return ()
+              when (null shareEntries) $ IO.copyResource envAws scopedArchiveFile archiveFile
 
     Left errorMessage -> do
       CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> T.pack errorMessage
