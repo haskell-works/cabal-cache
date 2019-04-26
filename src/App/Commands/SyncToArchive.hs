@@ -128,7 +128,7 @@ runSyncToArchive opts = do
 
               shareEntries <- (\\ ["doc"]) <$> IO.listMaybeDirectory packageSharePath
 
-              when (null shareEntries) $ IO.copyResource envAws scopedArchiveFile archiveFile
+              when (null shareEntries) $ IO.linkOrCopyResource envAws scopedArchiveFile archiveFile
 
     Left errorMessage -> do
       CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> T.pack errorMessage

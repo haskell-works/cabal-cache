@@ -7,7 +7,7 @@ module HaskellWorks.Ci.Assist.IO.Lazy
   , headS3Uri
   , writeResource
   , createLocalDirectoryIfMissing
-  , copyResource
+  , linkOrCopyResource
   ) where
 
 import Antiope.Core
@@ -92,8 +92,8 @@ copyS3Uri envAws (AWS.S3Uri sourceBucket sourceObjectKey) (AWS.S3Uri targetBucke
     then return (Right ())
     else return (Left "")
 
-copyResource :: MonadUnliftIO m => AWS.Env -> Location -> Location -> ExceptT String m ()
-copyResource envAws source target = case source of
+linkOrCopyResource :: MonadUnliftIO m => AWS.Env -> Location -> Location -> ExceptT String m ()
+linkOrCopyResource envAws source target = case source of
   S3 sourceS3Uri -> case target of
     S3 targetS3Uri -> do copyS3Uri envAws sourceS3Uri targetS3Uri
     Local _        -> throwError "Can't copy between different file backends"
@@ -101,4 +101,5 @@ copyResource envAws source target = case source of
     S3 _             -> throwError "Can't copy between different file backends"
     Local targetPath -> do
       liftIO $ IO.createDirectoryIfMissing True (FP.takeDirectory targetPath)
-      liftIO $ IO.copyFile sourcePath targetPath
+      targetPathExists <- liftIO $ IO.doesFileExist targetPath
+      unless targetPathExists $ liftIO $ IO.createFileLink sourcePath targetPath
