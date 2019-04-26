@@ -7,6 +7,7 @@ module HaskellWorks.Ci.Assist.IO.Lazy
   , headS3Uri
   , writeResource
   , createLocalDirectoryIfMissing
+  , copyResource
   ) where
 
 import Antiope.Core
@@ -32,10 +33,12 @@ import qualified Data.Text.IO                      as T
 import qualified HaskellWorks.Ci.Assist.IO.Console as CIO
 import qualified Network.AWS                       as AWS
 import qualified Network.AWS.Data                  as AWS
+import qualified Network.AWS.S3.CopyObject         as AWS
 import qualified Network.AWS.S3.HeadObject         as AWS
 import qualified Network.AWS.S3.PutObject          as AWS
 import qualified Network.HTTP.Types                as HTTP
 import qualified System.Directory                  as IO
+import qualified System.FilePath.Posix             as FP
 import qualified System.IO                         as IO
 
 {-# ANN module ("HLint: ignore Redundant do"        :: String) #-}
@@ -62,18 +65,40 @@ headS3Uri envAws (AWS.S3Uri b k) =
 chunkSize :: AWS.ChunkSize
 chunkSize = AWS.ChunkSize (1024 * 1024)
 
-uploadeToS3 :: MonadUnliftIO m => AWS.Env -> AWS.S3Uri -> LBS.ByteString -> m ()
-uploadeToS3 envAws (AWS.S3Uri b k) lbs = do
+uploadToS3 :: MonadUnliftIO m => AWS.Env -> AWS.S3Uri -> LBS.ByteString -> m ()
+uploadToS3 envAws (AWS.S3Uri b k) lbs = do
   let req = AWS.toBody lbs
   let po  = AWS.putObject b k req
   void $ runResAws envAws $ AWS.send po
 
 writeResource :: MonadUnliftIO m => AWS.Env -> Location -> LBS.ByteString -> m ()
 writeResource envAws loc lbs = case loc of
-  S3 s3Uri   -> uploadeToS3 envAws s3Uri lbs
+  S3 s3Uri   -> do
+    CIO.putStrLn $ "writeResource " <> toText loc
+    uploadToS3 envAws s3Uri lbs
   Local path -> liftIO $ LBS.writeFile path lbs
 
 createLocalDirectoryIfMissing :: (MonadCatch m, MonadIO m) => Location -> m ()
 createLocalDirectoryIfMissing = \case
   S3 s3Uri   -> return ()
   Local path -> liftIO $ IO.createDirectoryIfMissing True path
+
+copyS3Uri :: MonadUnliftIO m => AWS.Env -> AWS.S3Uri -> AWS.S3Uri -> ExceptT String m ()
+copyS3Uri envAws (AWS.S3Uri sourceBucket sourceObjectKey) (AWS.S3Uri targetBucket targetObjectKey) = ExceptT $ do
+  liftIO $ CIO.putStrLn $ "copyS3Uri " <> toText targetBucket <> " " <> toText targetObjectKey
+  response <- runResourceT $ runAws envAws $ AWS.send (AWS.copyObject targetBucket (toText sourceBucket <> "/" <> toText sourceObjectKey) targetObjectKey)
+  let responseCode = response ^. AWS.corsResponseStatus
+  if 200 <= responseCode && responseCode < 300
+    then return (Right ())
+    else return (Left "")
+
+copyResource :: MonadUnliftIO m => AWS.Env -> Location -> Location -> ExceptT String m ()
+copyResource envAws source target = case source of
+  S3 sourceS3Uri -> case target of
+    S3 targetS3Uri -> do copyS3Uri envAws sourceS3Uri targetS3Uri
+    Local _        -> throwError "Can't copy between different file backends"
+  Local sourcePath -> case target of
+    S3 _             -> throwError "Can't copy between different file backends"
+    Local targetPath -> do
+      liftIO $ IO.createDirectoryIfMissing True (FP.takeDirectory targetPath)
+      liftIO $ IO.copyFile sourcePath targetPath

@@ -33,6 +33,7 @@ import qualified Codec.Compression.GZip            as F
 import qualified Data.ByteString.Lazy              as LBS
 import qualified Data.Text                         as T
 import qualified HaskellWorks.Ci.Assist.GhcPkg     as GhcPkg
+import qualified HaskellWorks.Ci.Assist.Hash       as H
 import qualified HaskellWorks.Ci.Assist.IO.Console as CIO
 import qualified HaskellWorks.Ci.Assist.IO.Error   as IO
 import qualified HaskellWorks.Ci.Assist.IO.File    as IO
@@ -49,24 +50,28 @@ import qualified UnliftIO.Async                    as IO
 
 runSyncToArchive :: Z.SyncToArchiveOptions -> IO ()
 runSyncToArchive opts = do
-  let storePath   = opts ^. the @"storePath"
-  let archiveUri  = opts ^. the @"archiveUri" </> archiveVersion
-  let threads     = opts ^. the @"threads"
+  let storePath           = opts ^. the @"storePath"
+  let archiveUri          = opts ^. the @"archiveUri"
+  let threads             = opts ^. the @"threads"
+  let versionedArchiveUri = archiveUri </> archiveVersion
+  let storePathHash       = H.hashStorePath storePath
+  let scopedArchiveUri    = versionedArchiveUri </> T.pack storePathHash
 
   CIO.putStrLn $ "Store path: "       <> toText storePath
+  CIO.putStrLn $ "Store path hash: "  <> T.pack storePathHash
   CIO.putStrLn $ "Archive URI: "      <> toText archiveUri
   CIO.putStrLn $ "Archive version: "  <> archiveVersion
   CIO.putStrLn $ "Threads: "          <> tshow threads
-
-  let versionedArchiveUri = archiveUri </> archiveVersion
 
   mbPlan <- loadPlan
   case mbPlan of
     Right planJson -> do
       let compilerId = planJson ^. the @"compilerId"
       envAws <- mkEnv (opts ^. the @"region") (\_ _ -> pure ())
-      let archivePath = versionedArchiveUri </> compilerId
+      let archivePath       = versionedArchiveUri </> compilerId
+      let scopedArchivePath = scopedArchiveUri </> compilerId
       IO.createLocalDirectoryIfMissing archivePath
+      IO.createLocalDirectoryIfMissing scopedArchivePath
       let baseDir = opts ^. the @"storePath"
       CIO.putStrLn "Extracting package list"
 
@@ -101,22 +106,26 @@ runSyncToArchive opts = do
 
         IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> do
           let archiveFileBasename = packageDir pInfo <.> ".tar.gz"
-          let archiveFile = versionedArchiveUri </> T.pack archiveFileBasename
-          let packageStorePath = baseDir </> packageDir pInfo
-          archiveFileExists <- runResourceT $ IO.resourceExists envAws archiveFile
+          let archiveFile         = versionedArchiveUri </> T.pack archiveFileBasename
+          let scopedArchiveFile   = versionedArchiveUri </> T.pack storePathHash </> T.pack archiveFileBasename
+          let packageStorePath    = baseDir </> packageDir pInfo
+
+          archiveFileExists <- runResourceT $ IO.resourceExists envAws scopedArchiveFile
 
           unless archiveFileExists $ do
             packageStorePathExists <- doesDirectoryExist packageStorePath
 
             when packageStorePathExists $ void $ runExceptT $ IO.exceptWarn "Warning" $ do
               let rp2 = relativePaths2 storePath tempPath pInfo
-              CIO.putStrLn $ "Creating " <> toText archiveFile
+              CIO.putStrLn $ "Creating " <> toText scopedArchiveFile
 
               let tempArchiveFile = tempPath </> archiveFileBasename
 
               IO.createTar tempArchiveFile rp2
 
-              liftIO (LBS.readFile tempArchiveFile >>= IO.writeResource envAws archiveFile)
+              liftIO (LBS.readFile tempArchiveFile >>= IO.writeResource envAws scopedArchiveFile)
+
+              IO.copyResource envAws scopedArchiveFile archiveFile
 
               return ()
 
