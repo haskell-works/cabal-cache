@@ -18,7 +18,7 @@ import Control.Monad.Trans.Resource    (runResourceT)
 import Data.Generics.Product.Any       (the)
 import Data.List                       (isSuffixOf, (\\))
 import Data.Semigroup                  ((<>))
-import HaskellWorks.Ci.Assist.Core     (PackageInfo (..), Presence (..), Tagged (..), getPackages, loadPlan, relativePaths, relativePaths2)
+import HaskellWorks.Ci.Assist.Core     (PackageInfo (..), Presence (..), Tagged (..), getPackages, loadPlan, relativePaths)
 import HaskellWorks.Ci.Assist.Location ((<.>), (</>))
 import HaskellWorks.Ci.Assist.Metadata (createMetadata)
 import HaskellWorks.Ci.Assist.Show
@@ -94,18 +94,17 @@ runSyncToArchive opts = do
           let archiveFile         = versionedArchiveUri </> T.pack archiveFileBasename
           let scopedArchiveFile   = versionedArchiveUri </> T.pack storePathHash </> T.pack archiveFileBasename
           let packageStorePath    = storePath </> packageDir pInfo
-          let packageMetaPath     = workingStoreCompilerPath </> "_METADATA" </> packageDir pInfo
           let packageSharePath    = packageStorePath </> "share"
           archiveFileExists <- runResourceT $ IO.resourceExists envAws scopedArchiveFile
 
           unless archiveFileExists $ do
             packageStorePathExists <- doesDirectoryExist packageStorePath
 
-            when packageStorePathExists $ void $ runExceptT $ IO.exceptWarn "Warning" $ do
+            when packageStorePathExists $ void $ runExceptT $ IO.exceptWarn $ do
               let workingStorePackagePath = tempPath </> packageDir pInfo
               liftIO $ IO.createDirectoryIfMissing True workingStorePackagePath
 
-              let rp2 = relativePaths2 storePath tempPath pInfo
+              let rp2 = relativePaths storePath pInfo
               CIO.putStrLn $ "Creating " <> toText scopedArchiveFile
 
               let tempArchiveFile = tempPath </> archiveFileBasename

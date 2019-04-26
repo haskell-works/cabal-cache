@@ -11,7 +11,6 @@ module HaskellWorks.Ci.Assist.Core
   , Presence(..)
   , getPackages
   , relativePaths
-  , relativePaths2
   , loadPlan
   ) where
 
@@ -55,20 +54,14 @@ data PackageInfo = PackageInfo
   , libs       :: [Library]
   } deriving (Show, Eq, Generic, NFData)
 
-relativePaths2 :: FilePath -> PackageInfo -> [IO.TarGroup]
-relativePaths2 basePath pInfo =
+relativePaths :: FilePath -> PackageInfo -> [IO.TarGroup]
+relativePaths basePath pInfo =
   [ IO.TarGroup basePath $ mempty
       <> (pInfo ^. the @"libs")
       <> [packageDir pInfo]
   , IO.TarGroup basePath $ mempty
       <> ([pInfo ^. the @"confPath"] & filter ((== Present) . (^. the @"tag")) <&> (^. the @"value"))
   ]
-
-relativePaths :: PackageInfo -> [FilePath]
-relativePaths pInfo = mempty
-  <>  ([pInfo ^. the @"confPath"] & filter ((== Present) . (^. the @"tag")) <&> (^. the @"value"))
-  <>  [packageDir pInfo]
-  <>  (pInfo ^. the @"libs")
 
 getPackages :: FilePath -> Z.PlanJson -> IO [PackageInfo]
 getPackages basePath planJson = forM packages (mkPackageInfo basePath compilerId)
