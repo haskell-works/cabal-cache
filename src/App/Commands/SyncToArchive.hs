@@ -7,30 +7,30 @@ module App.Commands.SyncToArchive
   ( cmdSyncToArchive
   ) where
 
-import Antiope.Core                         (toText)
-import Antiope.Env                          (LogLevel, mkEnv)
-import App.Commands.Options.Parser          (optsSyncToArchive)
-import App.Static                           (homeDirectory)
-import Control.Lens                         hiding ((<.>))
-import Control.Monad                        (unless, when)
+import Antiope.Core                    (toText)
+import Antiope.Env                     (LogLevel, mkEnv)
+import App.Commands.Options.Parser     (optsSyncToArchive)
+import App.Static                      (homeDirectory)
+import Control.Lens                    hiding ((<.>))
+import Control.Monad                   (unless, when)
 import Control.Monad.Except
-import Control.Monad.Trans.Resource         (runResourceT)
-import Data.Generics.Product.Any            (the)
-import Data.List                            (isSuffixOf, (\\))
-import Data.Semigroup                       ((<>))
-import HaskellWorks.Ci.Assist.Core          (PackageInfo (..), Presence (..), Tagged (..), getPackages, loadPlan, relativePaths, relativePaths2)
-import HaskellWorks.Ci.Assist.Location      ((<.>), (</>))
-import HaskellWorks.Ci.Assist.PackageConfig (templateConfig)
+import Control.Monad.Trans.Resource    (runResourceT)
+import Data.Generics.Product.Any       (the)
+import Data.List                       (isSuffixOf, (\\))
+import Data.Semigroup                  ((<>))
+import HaskellWorks.Ci.Assist.Core     (PackageInfo (..), Presence (..), Tagged (..), getPackages, loadPlan, relativePaths)
+import HaskellWorks.Ci.Assist.Location ((<.>), (</>))
+import HaskellWorks.Ci.Assist.Metadata (createMetadata)
 import HaskellWorks.Ci.Assist.Show
-import HaskellWorks.Ci.Assist.Tar           (updateEntryWith)
-import HaskellWorks.Ci.Assist.Version       (archiveVersion)
-import Options.Applicative                  hiding (columns)
-import System.Directory                     (createDirectoryIfMissing, doesDirectoryExist)
+import HaskellWorks.Ci.Assist.Version  (archiveVersion)
+import Options.Applicative             hiding (columns)
+import System.Directory                (createDirectoryIfMissing, doesDirectoryExist)
 
 import qualified App.Commands.Options.Types        as Z
 import qualified Codec.Archive.Tar                 as F
 import qualified Codec.Compression.GZip            as F
 import qualified Data.ByteString.Lazy              as LBS
+import qualified Data.ByteString.Lazy.Char8        as LC8
 import qualified Data.Text                         as T
 import qualified HaskellWorks.Ci.Assist.GhcPkg     as GhcPkg
 import qualified HaskellWorks.Ci.Assist.Hash       as H
@@ -72,12 +72,11 @@ runSyncToArchive opts = do
       let scopedArchivePath = scopedArchiveUri </> compilerId
       IO.createLocalDirectoryIfMissing archivePath
       IO.createLocalDirectoryIfMissing scopedArchivePath
-      let baseDir = opts ^. the @"storePath"
       CIO.putStrLn "Extracting package list"
 
-      packages <- getPackages baseDir planJson
+      packages <- getPackages storePath planJson
 
-      let storeCompilerPath           = baseDir </> T.unpack compilerId
+      let storeCompilerPath           = storePath </> T.unpack compilerId
       let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"
 
       storeCompilerPackageDbPathExists <- doesDirectoryExist storeCompilerPackageDbPath
@@ -90,39 +89,29 @@ runSyncToArchive opts = do
       IO.withSystemTempDirectory "cabal-cache" $ \tempPath -> do
         CIO.putStrLn $ "Temp path: " <> tshow tempPath
 
-        CIO.putStrLn "Copying package.db directory for transformation"
-        let workingStoreCompilerPath = tempPath </> T.unpack compilerId
-        let workingStoreCompilerPackageDbPath = tempPath </> T.unpack compilerId </> "package.db"
-
-        runExceptT $ IO.exceptFatal "Fatal error" $ do
-          liftIO $ IO.createDirectoryIfMissing True workingStoreCompilerPackageDbPath
-
-        packageDbFiles <- IO.listDirectory storeCompilerPackageDbPath
-        let confFiles = filter (isSuffixOf ".conf") packageDbFiles
-
-        forM_ confFiles $ \confFile -> do
-          stream <- LBS.readFile (storeCompilerPackageDbPath </> confFile)
-          LBS.writeFile (workingStoreCompilerPackageDbPath </> confFile) (templateConfig baseDir stream)
-
         IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> do
           let archiveFileBasename = packageDir pInfo <.> ".tar.gz"
           let archiveFile         = versionedArchiveUri </> T.pack archiveFileBasename
           let scopedArchiveFile   = versionedArchiveUri </> T.pack storePathHash </> T.pack archiveFileBasename
-          let packageStorePath    = baseDir </> packageDir pInfo
+          let packageStorePath    = storePath </> packageDir pInfo
           let packageSharePath    = packageStorePath </> "share"
-
           archiveFileExists <- runResourceT $ IO.resourceExists envAws scopedArchiveFile
 
           unless archiveFileExists $ do
             packageStorePathExists <- doesDirectoryExist packageStorePath
 
-            when packageStorePathExists $ void $ runExceptT $ IO.exceptWarn "Warning" $ do
-              let rp2 = relativePaths2 storePath tempPath pInfo
+            when packageStorePathExists $ void $ runExceptT $ IO.exceptWarn $ do
+              let workingStorePackagePath = tempPath </> packageDir pInfo
+              liftIO $ IO.createDirectoryIfMissing True workingStorePackagePath
+
+              let rp2 = relativePaths storePath pInfo
               CIO.putStrLn $ "Creating " <> toText scopedArchiveFile
 
               let tempArchiveFile = tempPath </> archiveFileBasename
 
-              IO.createTar tempArchiveFile rp2
+              metas <- createMetadata tempPath pInfo [("store-path", LC8.pack storePath)]
+
+              IO.createTar tempArchiveFile (metas:rp2)
 
               liftIO (LBS.readFile tempArchiveFile >>= IO.writeResource envAws scopedArchiveFile)
 

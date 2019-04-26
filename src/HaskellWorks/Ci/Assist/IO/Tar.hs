@@ -13,6 +13,7 @@ module HaskellWorks.Ci.Assist.IO.Tar
 import Control.DeepSeq             (NFData)
 import Control.Lens
 import Control.Monad.Except
+import Control.Monad.IO.Class      (MonadIO, liftIO)
 import Data.Generics.Product.Any
 import Data.List
 import GHC.Generics
@@ -29,7 +30,7 @@ data TarGroup = TarGroup
   , entryPaths :: [FilePath]
   } deriving (Show, Eq, Generic, NFData)
 
-createTar :: FilePath -> [TarGroup] -> ExceptT String IO ()
+createTar :: MonadIO m => FilePath -> [TarGroup] -> ExceptT String m ()
 createTar tarFile groups = do
   let args = ["-zcf", tarFile] <> foldMap tarGroupToArgs groups
   process <- liftIO $ IO.spawnProcess "tar" args
@@ -38,7 +39,7 @@ createTar tarFile groups = do
     IO.ExitSuccess   -> return ()
     IO.ExitFailure n -> throwError ""
 
-extractTar :: FilePath -> FilePath -> ExceptT String IO ()
+extractTar :: MonadIO m => FilePath -> FilePath -> ExceptT String m ()
 extractTar tarFile targetPath = do
   process <- liftIO $ IO.spawnProcess "tar" ["-C", targetPath, "-zxf", tarFile]
   exitCode <- liftIO $ IO.waitForProcess process

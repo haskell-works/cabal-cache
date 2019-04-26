@@ -7,32 +7,36 @@ module App.Commands.SyncFromArchive
   ( cmdSyncFromArchive
   ) where
 
-import Antiope.Core                         (runResAws, toText)
-import Antiope.Env                          (LogLevel, mkEnv)
-import App.Commands.Options.Parser          (optsSyncFromArchive)
-import App.Static                           (homeDirectory)
-import Control.Lens                         hiding ((<.>))
-import Control.Monad                        (unless, void, when)
+import Antiope.Core                    (runResAws, toText)
+import Antiope.Env                     (LogLevel, mkEnv)
+import App.Commands.Options.Parser     (optsSyncFromArchive)
+import App.Static                      (homeDirectory)
+import Control.Lens                    hiding ((<.>))
+import Control.Monad                   (unless, void, when)
 import Control.Monad.Except
-import Control.Monad.IO.Class               (liftIO)
-import Control.Monad.Trans.Resource         (runResourceT)
-import Data.Generics.Product.Any            (the)
-import Data.Semigroup                       ((<>))
-import Data.Text                            (Text)
-import HaskellWorks.Ci.Assist.Core          (PackageInfo (..), Presence (..), Tagged (..), getPackages, loadPlan)
-import HaskellWorks.Ci.Assist.Location      ((<.>), (</>))
-import HaskellWorks.Ci.Assist.PackageConfig (unTemplateConfig)
+import Control.Monad.IO.Class          (liftIO)
+import Control.Monad.Trans.Resource    (runResourceT)
+import Data.ByteString.Lazy.Search     (replace)
+import Data.Generics.Product.Any       (the)
+import Data.Semigroup                  ((<>))
+import Data.Text                       (Text)
+import HaskellWorks.Ci.Assist.Core     (PackageInfo (..), Presence (..), Tagged (..), getPackages, loadPlan)
+import HaskellWorks.Ci.Assist.IO.Error (exceptWarn, maybeToExcept, maybeToExceptM)
+import HaskellWorks.Ci.Assist.Location ((<.>), (</>))
+import HaskellWorks.Ci.Assist.Metadata (deleteMetadata, loadMetadata)
 import HaskellWorks.Ci.Assist.Show
-import HaskellWorks.Ci.Assist.Tar           (mapEntriesWith)
-import HaskellWorks.Ci.Assist.Version       (archiveVersion)
-import Network.AWS.Types                    (Region (Oregon))
-import Options.Applicative                  hiding (columns)
-import System.Directory                     (createDirectoryIfMissing, doesDirectoryExist)
+import HaskellWorks.Ci.Assist.Version  (archiveVersion)
+import Network.AWS.Types               (Region (Oregon))
+import Options.Applicative             hiding (columns)
+import System.Directory                (createDirectoryIfMissing, doesDirectoryExist)
 
 import qualified App.Commands.Options.Types        as Z
 import qualified Codec.Archive.Tar                 as F
 import qualified Codec.Compression.GZip            as F
+import qualified Data.ByteString                   as BS
+import qualified Data.ByteString.Char8             as C8
 import qualified Data.ByteString.Lazy              as LBS
+import qualified Data.Map.Strict                   as Map
 import qualified Data.Text                         as T
 import qualified HaskellWorks.Ci.Assist.GhcPkg     as GhcPkg
 import qualified HaskellWorks.Ci.Assist.Hash       as H
@@ -70,13 +74,12 @@ runSyncFromArchive opts = do
       env <- mkEnv (opts ^. the @"region") (\_ _ -> pure ())
       let compilerId                  = planJson ^. the @"compilerId"
       let archivePath                 = versionedArchiveUri </> compilerId
-      let baseDir                     = opts ^. the @"storePath"
-      let storeCompilerPath           = baseDir </> T.unpack compilerId
+      let storeCompilerPath           = storePath </> T.unpack compilerId
       let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"
       let storeCompilerLibPath        = storeCompilerPath </> "lib"
 
       CIO.putStrLn "Creating store directories"
-      createDirectoryIfMissing True baseDir
+      createDirectoryIfMissing True storePath
       createDirectoryIfMissing True storeCompilerPath
       createDirectoryIfMissing True storeCompilerLibPath
 
@@ -86,7 +89,7 @@ runSyncFromArchive opts = do
         CIO.putStrLn "Package DB missing. Creating Package DB"
         GhcPkg.init storeCompilerPackageDbPath
 
-      packages <- getPackages baseDir planJson
+      packages <- getPackages storePath planJson
 
       IO.withSystemTempDirectory "cabal-cache" $ \tempPath -> do
         IO.createDirectoryIfMissing True (tempPath </> T.unpack compilerId </> "package.db")
@@ -94,33 +97,33 @@ runSyncFromArchive opts = do
         IO.pooledForConcurrentlyN_ threads packages $ \pInfo -> do
           let archiveBaseName = packageDir pInfo <.> ".tar.gz"
           let archiveFile = versionedArchiveUri </> T.pack archiveBaseName
-          let packageStorePath = baseDir </> packageDir pInfo
+          let packageStorePath = storePath </> packageDir pInfo
           storeDirectoryExists <- doesDirectoryExist packageStorePath
           unless storeDirectoryExists $ do
             arhiveFileExists <- runResourceT $ IO.resourceExists env archiveFile
             when arhiveFileExists $ do
               CIO.putStrLn $ "Extracting: " <> T.pack archiveBaseName
-              runResAws env $ do
-                maybeArchiveFileContents <- IO.readResource env archiveFile
 
-                case maybeArchiveFileContents of
-                  Just archiveFileContents -> do
-                    let tempArchiveFile = tempPath </> archiveBaseName :: FilePath
-                    liftIO $ LBS.writeFile tempArchiveFile archiveFileContents
-                    liftIO $ runExceptT $ IO.extractTar tempArchiveFile storePath
+              void $ runResAws env $ onErrorClean packageStorePath $ do
+                archiveFileContents <- IO.readResource env archiveFile & maybeToExceptM ("Archive unavailable: " <> show (toText archiveFile))
+                let tempArchiveFile = tempPath </> archiveBaseName
+                liftIO $ LBS.writeFile tempArchiveFile archiveFileContents
+                IO.extractTar tempArchiveFile storePath
 
-                    case confPath pInfo of
-                      Tagged conf _ -> do
-                        let theConfPath = storePath </> conf
-                        let tempConfPath = tempPath </> conf
-                        confPathExists <- liftIO $ IO.doesFileExist theConfPath
-                        when confPathExists $ do
-                          confContents <- liftIO $ LBS.readFile theConfPath
-                          liftIO $ LBS.writeFile tempConfPath (unTemplateConfig baseDir confContents)
-                          liftIO $ IO.renamePath tempConfPath theConfPath
+                meta <- loadMetadata packageStorePath
+                oldStorePath <- maybeToExcept "store-path is missing from Metadata" (Map.lookup "store-path" meta)
 
-                  Nothing -> do
-                    CIO.putStrLn $ "Archive unavailable: " <> toText archiveFile
+                case confPath pInfo of
+                  Tagged conf _ -> do
+                    let theConfPath = storePath </> conf
+                    let tempConfPath = tempPath </> conf
+                    confPathExists <- liftIO $ IO.doesFileExist theConfPath
+                    when confPathExists $ do
+                      confContents <- liftIO $ LBS.readFile theConfPath
+                      liftIO $ LBS.writeFile tempConfPath (replace (LBS.toStrict oldStorePath) (C8.pack storePath) confContents)
+                      liftIO $ IO.renamePath tempConfPath theConfPath
+
+                deleteMetadata packageStorePath
 
       CIO.putStrLn "Recaching package database"
       GhcPkg.recache storeCompilerPackageDbPath
@@ -129,6 +132,10 @@ runSyncFromArchive opts = do
       CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> T.pack errorMessage
 
   return ()
+
+onErrorClean :: MonadIO m => FilePath -> ExceptT String m () -> m ()
+onErrorClean pkgStorePath f =
+  void $ runExceptT $ exceptWarn f `catchError` (\e -> liftIO $ IO.removeDirectoryRecursive pkgStorePath)
 
 cmdSyncFromArchive :: Mod CommandFields (IO ())
 cmdSyncFromArchive = command "sync-from-archive"  $ flip info idm $ runSyncFromArchive <$> optsSyncFromArchive
