@@ -1,10 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
-module App.Commands.Options.Parser
-where
+module App.Commands.Options.Parser where
 
 import Antiope.Core                    (FromText, Region (..), fromText)
 import App.Commands.Options.Types      (SyncFromArchiveOptions (..), SyncToArchiveOptions (..), VersionOptions (..))
 import App.Static                      (homeDirectory)
+import Control.Applicative
 import HaskellWorks.Ci.Assist.Location (Location (..), toLocation, (</>))
 import Options.Applicative
 
@@ -29,6 +29,13 @@ optsSyncFromArchive = SyncFromArchiveOptions
       <>  help "Path to cabal store"
       <>  metavar "DIRECTORY"
       <>  value (homeDirectory </> ".cabal" </> "store")
+      )
+  <*> optional
+      ( strOption
+        (   long "store-path-hash"
+        <>  help "Store path hash (do not use)"
+        <>  metavar "HASH"
+        )
       )
   <*> option auto
       (   long "threads"
@@ -56,6 +63,13 @@ optsSyncToArchive = SyncToArchiveOptions
       <>  help "Path to cabal store"
       <>  metavar "DIRECTORY"
       <>  value (homeDirectory </> ".cabal" </> "store")
+      )
+  <*> optional
+      ( strOption
+        (   long "store-path-hash"
+        <>  help "Store path hash (do not use)"
+        <>  metavar "HASH"
+        )
       )
   <*> option auto
       (   long "threads"

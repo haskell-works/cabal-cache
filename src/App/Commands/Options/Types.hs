@@ -11,17 +11,19 @@ import HaskellWorks.Ci.Assist.Location
 import Network.AWS.Types               (Region)
 
 data SyncToArchiveOptions = SyncToArchiveOptions
-  { region     :: Region
-  , archiveUri :: Location
-  , storePath  :: FilePath
-  , threads    :: Int
+  { region        :: Region
+  , archiveUri    :: Location
+  , storePath     :: FilePath
+  , storePathHash :: Maybe String
+  , threads       :: Int
   } deriving (Eq, Show, Generic)
 
 data SyncFromArchiveOptions = SyncFromArchiveOptions
-  { region     :: Region
-  , archiveUri :: Location
-  , storePath  :: FilePath
-  , threads    :: Int
+  { region        :: Region
+  , archiveUri    :: Location
+  , storePath     :: FilePath
+  , storePathHash :: Maybe String
+  , threads       :: Int
   } deriving (Eq, Show, Generic)
 
 data VersionOptions = VersionOptions deriving (Eq, Show, Generic)

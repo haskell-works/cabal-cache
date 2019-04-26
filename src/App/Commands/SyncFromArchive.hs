@@ -18,6 +18,7 @@ import Control.Monad.IO.Class          (liftIO)
 import Control.Monad.Trans.Resource    (runResourceT)
 import Data.ByteString.Lazy.Search     (replace)
 import Data.Generics.Product.Any       (the)
+import Data.Maybe
 import Data.Semigroup                  ((<>))
 import Data.Text                       (Text)
 import HaskellWorks.Ci.Assist.Core     (PackageInfo (..), Presence (..), Tagged (..), getPackages, loadPlan)
@@ -58,7 +59,8 @@ runSyncFromArchive opts = do
   let archiveUri          = opts ^. the @"archiveUri"
   let threads             = opts ^. the @"threads"
   let versionedArchiveUri = archiveUri </> archiveVersion
-  let storePathHash       = H.hashStorePath storePath
+  let storePathHash       = opts ^. the @"storePathHash" & fromMaybe (H.hashStorePath storePath)
+  let scopedArchiveUri    = versionedArchiveUri </> T.pack storePathHash
 
   CIO.putStrLn $ "Store path: "       <> toText storePath
   CIO.putStrLn $ "Store path hash: "  <> T.pack storePathHash
@@ -71,10 +73,13 @@ runSyncFromArchive opts = do
   mbPlan <- loadPlan
   case mbPlan of
     Right planJson -> do
-      env <- mkEnv (opts ^. the @"region") (\_ _ -> pure ())
+      envAws <- mkEnv (opts ^. the @"region") (\_ _ -> pure ())
       let compilerId                  = planJson ^. the @"compilerId"
       let archivePath                 = versionedArchiveUri </> compilerId
       let storeCompilerPath           = storePath </> T.unpack compilerId
+      -- xx let scopedArchivePath           = scopedArchiveUri </> compilerId
+      -- xx let baseDir                     = opts ^. the @"storePath"
+      -- xx let storeCompilerPath           = baseDir </> T.unpack compilerId
       let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"
       let storeCompilerLibPath        = storeCompilerPath </> "lib"
 
@@ -95,35 +100,41 @@ runSyncFromArchive opts = do
         IO.createDirectoryIfMissing True (tempPath </> T.unpack compilerId </> "package.db")
 
         IO.pooledForConcurrentlyN_ threads packages $ \pInfo -> do
-          let archiveBaseName = packageDir pInfo <.> ".tar.gz"
-          let archiveFile = versionedArchiveUri </> T.pack archiveBaseName
-          let packageStorePath = storePath </> packageDir pInfo
+          let archiveBaseName   = packageDir pInfo <.> ".tar.gz"
+          let archiveFile       = versionedArchiveUri </> T.pack archiveBaseName
+          let scopedArchiveFile = scopedArchiveUri </> T.pack archiveBaseName
+          let packageStorePath  = storePath </> packageDir pInfo
           storeDirectoryExists <- doesDirectoryExist packageStorePath
           unless storeDirectoryExists $ do
-            arhiveFileExists <- runResourceT $ IO.resourceExists env archiveFile
-            when arhiveFileExists $ do
-              CIO.putStrLn $ "Extracting: " <> T.pack archiveBaseName
+            maybeExistingArchiveFile <- IO.firstExistingResource envAws [scopedArchiveFile, archiveFile]
+            forM_ maybeExistingArchiveFile $ \existingArchiveFile -> do
+              CIO.putStrLn $ "Extracting: " <> toText existingArchiveFile
+              void $ runResAws envAws $ onErrorClean packageStorePath $ do
+                maybeArchiveFileContents <- IO.readResource envAws existingArchiveFile
 
-              void $ runResAws env $ onErrorClean packageStorePath $ do
-                archiveFileContents <- IO.readResource env archiveFile & maybeToExceptM ("Archive unavailable: " <> show (toText archiveFile))
-                let tempArchiveFile = tempPath </> archiveBaseName
-                liftIO $ LBS.writeFile tempArchiveFile archiveFileContents
-                IO.extractTar tempArchiveFile storePath
+                case maybeArchiveFileContents of
+                  Just archiveFileContents -> do
+                    existingArchiveFileContents <- IO.readResource envAws existingArchiveFile & maybeToExceptM ("Archive unavailable: " <> show (toText archiveFile))
+                    let tempArchiveFile = tempPath </> archiveBaseName
+                    liftIO $ LBS.writeFile tempArchiveFile existingArchiveFileContents
+                    IO.extractTar tempArchiveFile storePath
 
-                meta <- loadMetadata packageStorePath
-                oldStorePath <- maybeToExcept "store-path is missing from Metadata" (Map.lookup "store-path" meta)
+                    meta <- loadMetadata packageStorePath
+                    oldStorePath <- maybeToExcept "store-path is missing from Metadata" (Map.lookup "store-path" meta)
 
-                case confPath pInfo of
-                  Tagged conf _ -> do
-                    let theConfPath = storePath </> conf
-                    let tempConfPath = tempPath </> conf
-                    confPathExists <- liftIO $ IO.doesFileExist theConfPath
-                    when confPathExists $ do
-                      confContents <- liftIO $ LBS.readFile theConfPath
-                      liftIO $ LBS.writeFile tempConfPath (replace (LBS.toStrict oldStorePath) (C8.pack storePath) confContents)
-                      liftIO $ IO.renamePath tempConfPath theConfPath
+                    case confPath pInfo of
+                      Tagged conf _ -> do
+                        let theConfPath = storePath </> conf
+                        let tempConfPath = tempPath </> conf
+                        confPathExists <- liftIO $ IO.doesFileExist theConfPath
+                        when confPathExists $ do
+                          confContents <- liftIO $ LBS.readFile theConfPath
+                          liftIO $ LBS.writeFile tempConfPath (replace (LBS.toStrict oldStorePath) (C8.pack storePath) confContents)
+                          liftIO $ IO.renamePath tempConfPath theConfPath
+                  Nothing -> do
+                    CIO.putStrLn $ "Archive unavailable: " <> toText existingArchiveFile
 
-                deleteMetadata packageStorePath
+                    deleteMetadata packageStorePath
 
       CIO.putStrLn "Recaching package database"
       GhcPkg.recache storeCompilerPackageDbPath
