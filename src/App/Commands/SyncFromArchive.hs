@@ -35,6 +35,7 @@ import qualified Codec.Compression.GZip            as F
 import qualified Data.ByteString.Lazy              as LBS
 import qualified Data.Text                         as T
 import qualified HaskellWorks.Ci.Assist.GhcPkg     as GhcPkg
+import qualified HaskellWorks.Ci.Assist.Hash       as H
 import qualified HaskellWorks.Ci.Assist.IO.Console as CIO
 import qualified HaskellWorks.Ci.Assist.IO.Lazy    as IO
 import qualified HaskellWorks.Ci.Assist.IO.Tar     as IO
@@ -49,18 +50,19 @@ import qualified UnliftIO.Async                    as IO
 
 runSyncFromArchive :: Z.SyncFromArchiveOptions -> IO ()
 runSyncFromArchive opts = do
-  let storePath   = opts ^. the @"storePath"
-  let archiveUri  = opts ^. the @"archiveUri"
-  let threads     = opts ^. the @"threads"
+  let storePath           = opts ^. the @"storePath"
+  let archiveUri          = opts ^. the @"archiveUri"
+  let threads             = opts ^. the @"threads"
+  let versionedArchiveUri = archiveUri </> archiveVersion
+  let storePathHash       = H.hashStorePath storePath
 
   CIO.putStrLn $ "Store path: "       <> toText storePath
+  CIO.putStrLn $ "Store path hash: "  <> T.pack storePathHash
   CIO.putStrLn $ "Archive URI: "      <> toText archiveUri
   CIO.putStrLn $ "Archive version: "  <> archiveVersion
   CIO.putStrLn $ "Threads: "          <> tshow threads
 
   GhcPkg.testAvailability
-
-  let versionedArchiveUri = archiveUri </> archiveVersion
 
   mbPlan <- loadPlan
   case mbPlan of
