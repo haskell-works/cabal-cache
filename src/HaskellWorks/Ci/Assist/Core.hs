@@ -55,12 +55,12 @@ data PackageInfo = PackageInfo
   , libs       :: [Library]
   } deriving (Show, Eq, Generic, NFData)
 
-relativePaths2 :: FilePath -> FilePath -> PackageInfo -> [IO.TarGroup]
-relativePaths2 basePath tmpPath pInfo =
+relativePaths2 :: FilePath -> PackageInfo -> [IO.TarGroup]
+relativePaths2 basePath pInfo =
   [ IO.TarGroup basePath $ mempty
       <> (pInfo ^. the @"libs")
       <> [packageDir pInfo]
-  , IO.TarGroup tmpPath $ mempty
+  , IO.TarGroup basePath $ mempty
       <> ([pInfo ^. the @"confPath"] & filter ((== Present) . (^. the @"tag")) <&> (^. the @"value"))
   ]
 

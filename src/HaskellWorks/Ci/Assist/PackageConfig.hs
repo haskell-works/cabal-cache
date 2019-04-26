@@ -13,8 +13,5 @@ import qualified Data.ByteString.Lazy as LBS
 storePathMacro :: BS.ByteString
 storePathMacro = "${STORE_PATH}"
 
-templateConfig :: FilePath -> LBS.ByteString -> LBS.ByteString
-templateConfig storePath = replace (pack storePath) storePathMacro
-
 unTemplateConfig :: FilePath -> LBS.ByteString -> LBS.ByteString
 unTemplateConfig storePath = replace storePathMacro (pack storePath)

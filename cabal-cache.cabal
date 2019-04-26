@@ -106,6 +106,7 @@ library
       HaskellWorks.Ci.Assist.IO.Lazy
       HaskellWorks.Ci.Assist.IO.Tar
       HaskellWorks.Ci.Assist.Location
+      HaskellWorks.Ci.Assist.Metadata
       HaskellWorks.Ci.Assist.Options
       HaskellWorks.Ci.Assist.PackageConfig
       HaskellWorks.Ci.Assist.Show
