@@ -1,31 +1,40 @@
+{-# LANGUAGE TupleSections #-}
 module HaskellWorks.Ci.Assist.Metadata
 where
 
+import Control.Lens                  ((<&>))
+import Control.Monad                 (forM_)
 import Control.Monad.IO.Class        (MonadIO, liftIO)
 import HaskellWorks.Ci.Assist.Core   (PackageInfo (..))
 import HaskellWorks.Ci.Assist.IO.Tar (TarGroup (..))
-import System.FilePath               ((<.>), (</>))
+import System.FilePath               (makeRelative, takeFileName, (<.>), (</>))
 
 import qualified Data.ByteString.Lazy as LBS
+import qualified Data.Map.Strict      as Map
 import qualified Data.Text            as T
 import qualified System.Directory     as IO
 
-newtype Metadata = Metadata FilePath deriving (Show, Eq, Ord)
-
 metaDir :: String
-metaDir = "_METADATA"
+metaDir = "_CC_METADATA"
 
-createMetadata :: MonadIO m => FilePath -> PackageInfo -> m Metadata
-createMetadata tempPath pkg = liftIO $ do
-  let pkgMetaPath = tempPath </> T.unpack (compilerId pkg) </> metaDir </> packageDir pkg
-  IO.createDirectoryIfMissing True (pkgMetaPath </> metaDir)
-  pure (Metadata pkgMetaPath)
+createMetadata :: MonadIO m => FilePath -> PackageInfo -> [(T.Text, LBS.ByteString)] -> m TarGroup
+createMetadata storePath pkg values = liftIO $ do
+  let pkgMetaPath = storePath </> packageDir pkg </> metaDir
+  IO.createDirectoryIfMissing True pkgMetaPath
+  forM_ values $ \(k, v) -> LBS.writeFile (pkgMetaPath </> T.unpack k) v
+  pure $ TarGroup storePath [packageDir pkg </> metaDir]
 
-addMetadata :: MonadIO m => Metadata -> T.Text -> LBS.ByteString -> m ()
-addMetadata (Metadata pkgMetaPath) key =
-  liftIO . LBS.writeFile (pkgMetaPath </> metaDir </> T.unpack key)
+loadMetadata :: MonadIO m => FilePath -> m (Map.Map T.Text LBS.ByteString)
+loadMetadata pkgStorePath = liftIO $ do
+  let pkgMetaPath = pkgStorePath </> metaDir
+  exists <- IO.doesDirectoryExist pkgMetaPath
+  if not exists
+    then pure Map.empty
+    else IO.listDirectory pkgMetaPath
+          <&> fmap (pkgMetaPath </>)
+          >>= traverse (\mfile -> (T.pack (takeFileName mfile),) <$> LBS.readFile mfile)
+          <&> Map.fromList
 
-getMetadataTarGroup :: MonadIO m => Metadata -> m TarGroup
-getMetadataTarGroup (Metadata pkgMetaPath) = liftIO $ do
-  metas <- IO.listDirectory pkgMetaPath
-  pure (TarGroup pkgMetaPath metas)
+deleteMetadata :: MonadIO m => FilePath -> m ()
+deleteMetadata pkgStorePath =
+  liftIO $ IO.removeDirectoryRecursive (pkgStorePath </> metaDir)

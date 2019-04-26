@@ -20,7 +20,7 @@ import Data.List                       (isSuffixOf, (\\))
 import Data.Semigroup                  ((<>))
 import HaskellWorks.Ci.Assist.Core     (PackageInfo (..), Presence (..), Tagged (..), getPackages, loadPlan, relativePaths, relativePaths2)
 import HaskellWorks.Ci.Assist.Location ((<.>), (</>))
-import HaskellWorks.Ci.Assist.Metadata (addMetadata, createMetadata, getMetadataTarGroup)
+import HaskellWorks.Ci.Assist.Metadata (createMetadata)
 import HaskellWorks.Ci.Assist.Show
 import HaskellWorks.Ci.Assist.Version  (archiveVersion)
 import Options.Applicative             hiding (columns)
@@ -72,12 +72,11 @@ runSyncToArchive opts = do
       let scopedArchivePath = scopedArchiveUri </> compilerId
       IO.createLocalDirectoryIfMissing archivePath
       IO.createLocalDirectoryIfMissing scopedArchivePath
-      let baseDir = opts ^. the @"storePath"
       CIO.putStrLn "Extracting package list"
 
-      packages <- getPackages baseDir planJson
+      packages <- getPackages storePath planJson
 
-      let storeCompilerPath           = baseDir </> T.unpack compilerId
+      let storeCompilerPath           = storePath </> T.unpack compilerId
       let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"
 
       storeCompilerPackageDbPathExists <- doesDirectoryExist storeCompilerPackageDbPath
@@ -90,14 +89,11 @@ runSyncToArchive opts = do
       IO.withSystemTempDirectory "cabal-cache" $ \tempPath -> do
         CIO.putStrLn $ "Temp path: " <> tshow tempPath
 
-        CIO.putStrLn "Copying package.db directory for transformation"
-        let workingStoreCompilerPath = tempPath </> T.unpack compilerId
-
         IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> do
           let archiveFileBasename = packageDir pInfo <.> ".tar.gz"
           let archiveFile         = versionedArchiveUri </> T.pack archiveFileBasename
           let scopedArchiveFile   = versionedArchiveUri </> T.pack storePathHash </> T.pack archiveFileBasename
-          let packageStorePath    = baseDir </> packageDir pInfo
+          let packageStorePath    = storePath </> packageDir pInfo
           let packageMetaPath     = workingStoreCompilerPath </> "_METADATA" </> packageDir pInfo
           let packageSharePath    = packageStorePath </> "share"
           archiveFileExists <- runResourceT $ IO.resourceExists envAws scopedArchiveFile
@@ -106,16 +102,17 @@ runSyncToArchive opts = do
             packageStorePathExists <- doesDirectoryExist packageStorePath
 
             when packageStorePathExists $ void $ runExceptT $ IO.exceptWarn "Warning" $ do
+              let workingStorePackagePath = tempPath </> packageDir pInfo
+              liftIO $ IO.createDirectoryIfMissing True workingStorePackagePath
+
               let rp2 = relativePaths2 storePath tempPath pInfo
               CIO.putStrLn $ "Creating " <> toText scopedArchiveFile
 
               let tempArchiveFile = tempPath </> archiveFileBasename
 
-              meta <- createMetadata tempPath pInfo
-              addMetadata meta "store-path" (LC8.pack baseDir)
-              metaGroup <- getMetadataTarGroup meta
+              metas <- createMetadata tempPath pInfo [("store-path", LC8.pack storePath)]
 
-              IO.createTar tempArchiveFile (metaGroup : rp2)
+              IO.createTar tempArchiveFile (metas:rp2)
 
               liftIO (LBS.readFile tempArchiveFile >>= IO.writeResource envAws scopedArchiveFile)
 
