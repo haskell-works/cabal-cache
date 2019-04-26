@@ -49,7 +49,7 @@ import qualified UnliftIO.Async                    as IO
 runSyncFromArchive :: Z.SyncFromArchiveOptions -> IO ()
 runSyncFromArchive opts = do
   let storePath   = opts ^. the @"storePath"
-  let archiveUri  = opts ^. the @"archiveUri"
+  let archiveUri  = opts ^. the @"archiveUri" </> "v1"
   let threads     = opts ^. the @"threads"
 
   CIO.putStrLn $ "Store path: "   <> toText storePath
