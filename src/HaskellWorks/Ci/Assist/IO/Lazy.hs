@@ -4,6 +4,7 @@
 module HaskellWorks.Ci.Assist.IO.Lazy
   ( readResource
   , resourceExists
+  , firstExistingResource
   , headS3Uri
   , writeResource
   , createLocalDirectoryIfMissing
@@ -22,6 +23,7 @@ import Data.Conduit.Lazy               (lazyConsume)
 import Data.Either                     (isRight)
 import Data.Text                       (Text)
 import HaskellWorks.Ci.Assist.Location (Location (..))
+import HaskellWorks.Ci.Assist.Show
 import Network.AWS                     (MonadAWS, chunkedFile)
 import Network.AWS.Data.Body           (_streamBody)
 
@@ -40,6 +42,7 @@ import qualified Network.HTTP.Types                as HTTP
 import qualified System.Directory                  as IO
 import qualified System.FilePath.Posix             as FP
 import qualified System.IO                         as IO
+import qualified System.IO.Error                   as IO
 
 {-# ANN module ("HLint: ignore Redundant do"        :: String) #-}
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
@@ -50,10 +53,35 @@ readResource envAws = \case
   S3 s3Uri    -> runAws envAws $ AWS.downloadFromS3Uri s3Uri
   Local path  -> liftIO $ Just <$> LBS.readFile path
 
-resourceExists :: (MonadResource m, MonadCatch m, MonadIO m) => AWS.Env -> Location -> m Bool
+safePathIsSymbolLink :: FilePath -> IO Bool
+safePathIsSymbolLink filePath = catch (IO.pathIsSymbolicLink filePath) handler
+  where handler :: IOError -> IO Bool
+        handler e = if IO.isDoesNotExistError e
+          then return False
+          else return True
+
+resourceExists :: (MonadUnliftIO m, MonadCatch m, MonadIO m) => AWS.Env -> Location -> m Bool
 resourceExists envAws = \case
-  S3 s3Uri    -> isRight <$> headS3Uri envAws s3Uri
-  Local path  -> liftIO $ IO.doesFileExist path
+  S3 s3Uri    -> isRight <$> runResourceT (headS3Uri envAws s3Uri)
+  Local path  -> do
+    fileExists <- liftIO $ IO.doesFileExist path
+    if fileExists
+      then return True
+      else do
+        symbolicLinkExists <- liftIO $ safePathIsSymbolLink path
+        if symbolicLinkExists
+          then do
+            target <- liftIO $ IO.getSymbolicLinkTarget path
+            resourceExists envAws (Local target)
+          else return False
+
+firstExistingResource :: (MonadUnliftIO m, MonadCatch m, MonadIO m) => AWS.Env -> [Location] -> m (Maybe Location)
+firstExistingResource envAws [] = return Nothing
+firstExistingResource envAws (a:as) = do
+  exists <- resourceExists envAws a
+  if exists
+    then return (Just a)
+    else firstExistingResource envAws as
 
 headS3Uri :: (MonadResource m, MonadCatch m) => AWS.Env -> AWS.S3Uri -> m (Either String AWS.HeadObjectResponse)
 headS3Uri envAws (AWS.S3Uri b k) =

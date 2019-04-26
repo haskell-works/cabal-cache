@@ -17,6 +17,7 @@ import Control.Monad.Except
 import Control.Monad.Trans.Resource    (runResourceT)
 import Data.Generics.Product.Any       (the)
 import Data.List                       (isSuffixOf, (\\))
+import Data.Maybe
 import Data.Semigroup                  ((<>))
 import HaskellWorks.Ci.Assist.Core     (PackageInfo (..), Presence (..), Tagged (..), getPackages, loadPlan, relativePaths)
 import HaskellWorks.Ci.Assist.Location ((<.>), (</>))
@@ -41,6 +42,7 @@ import qualified HaskellWorks.Ci.Assist.IO.Lazy    as IO
 import qualified HaskellWorks.Ci.Assist.IO.Tar     as IO
 import qualified HaskellWorks.Ci.Assist.Types      as Z
 import qualified System.Directory                  as IO
+import qualified System.FilePath.Posix             as FP
 import qualified System.IO                         as IO
 import qualified System.IO.Temp                    as IO
 import qualified UnliftIO.Async                    as IO
@@ -54,7 +56,7 @@ runSyncToArchive opts = do
   let archiveUri          = opts ^. the @"archiveUri"
   let threads             = opts ^. the @"threads"
   let versionedArchiveUri = archiveUri </> archiveVersion
-  let storePathHash       = H.hashStorePath storePath
+  let storePathHash       = opts ^. the @"storePathHash" & fromMaybe (H.hashStorePath storePath)
   let scopedArchiveUri    = versionedArchiveUri </> T.pack storePathHash
 
   CIO.putStrLn $ "Store path: "       <> toText storePath
