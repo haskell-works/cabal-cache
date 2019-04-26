@@ -24,6 +24,7 @@ import HaskellWorks.Ci.Assist.Location      ((<.>), (</>))
 import HaskellWorks.Ci.Assist.PackageConfig (unTemplateConfig)
 import HaskellWorks.Ci.Assist.Show
 import HaskellWorks.Ci.Assist.Tar           (mapEntriesWith)
+import HaskellWorks.Ci.Assist.Version       (archiveVersion)
 import Network.AWS.Types                    (Region (Oregon))
 import Options.Applicative                  hiding (columns)
 import System.Directory                     (createDirectoryIfMissing, doesDirectoryExist)
@@ -49,21 +50,24 @@ import qualified UnliftIO.Async                    as IO
 runSyncFromArchive :: Z.SyncFromArchiveOptions -> IO ()
 runSyncFromArchive opts = do
   let storePath   = opts ^. the @"storePath"
-  let archiveUri  = opts ^. the @"archiveUri" </> "v1"
+  let archiveUri  = opts ^. the @"archiveUri"
   let threads     = opts ^. the @"threads"
 
-  CIO.putStrLn $ "Store path: "   <> toText storePath
-  CIO.putStrLn $ "Archive URI: "  <> toText archiveUri
-  CIO.putStrLn $ "Threads: "      <> tshow threads
+  CIO.putStrLn $ "Store path: "       <> toText storePath
+  CIO.putStrLn $ "Archive URI: "      <> toText archiveUri
+  CIO.putStrLn $ "Archive version: "  <> archiveVersion
+  CIO.putStrLn $ "Threads: "          <> tshow threads
 
   GhcPkg.testAvailability
+
+  let versionedArchiveUri = archiveUri </> archiveVersion
 
   mbPlan <- loadPlan
   case mbPlan of
     Right planJson -> do
       env <- mkEnv (opts ^. the @"region") (\_ _ -> pure ())
       let compilerId                  = planJson ^. the @"compilerId"
-      let archivePath                 = archiveUri </> compilerId
+      let archivePath                 = versionedArchiveUri </> compilerId
       let baseDir                     = opts ^. the @"storePath"
       let storeCompilerPath           = baseDir </> T.unpack compilerId
       let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"
@@ -87,7 +91,7 @@ runSyncFromArchive opts = do
 
         IO.pooledForConcurrentlyN_ threads packages $ \pInfo -> do
           let archiveBaseName = packageDir pInfo <.> ".tar.gz"
-          let archiveFile = archiveUri </> T.pack archiveBaseName
+          let archiveFile = versionedArchiveUri </> T.pack archiveBaseName
           let packageStorePath = baseDir </> packageDir pInfo
           storeDirectoryExists <- doesDirectoryExist packageStorePath
           unless storeDirectoryExists $ do

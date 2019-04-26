@@ -23,6 +23,7 @@ import HaskellWorks.Ci.Assist.Location      ((<.>), (</>))
 import HaskellWorks.Ci.Assist.PackageConfig (templateConfig)
 import HaskellWorks.Ci.Assist.Show
 import HaskellWorks.Ci.Assist.Tar           (updateEntryWith)
+import HaskellWorks.Ci.Assist.Version       (archiveVersion)
 import Options.Applicative                  hiding (columns)
 import System.Directory                     (createDirectoryIfMissing, doesDirectoryExist)
 
@@ -49,19 +50,22 @@ import qualified UnliftIO.Async                    as IO
 runSyncToArchive :: Z.SyncToArchiveOptions -> IO ()
 runSyncToArchive opts = do
   let storePath   = opts ^. the @"storePath"
-  let archiveUri  = opts ^. the @"archiveUri" </> "v1"
+  let archiveUri  = opts ^. the @"archiveUri" </> archiveVersion
   let threads     = opts ^. the @"threads"
 
-  CIO.putStrLn $ "Store path: "   <> toText storePath
-  CIO.putStrLn $ "Archive URI: "  <> toText archiveUri
-  CIO.putStrLn $ "Threads: "      <> tshow threads
+  CIO.putStrLn $ "Store path: "       <> toText storePath
+  CIO.putStrLn $ "Archive URI: "      <> toText archiveUri
+  CIO.putStrLn $ "Archive version: "  <> archiveVersion
+  CIO.putStrLn $ "Threads: "          <> tshow threads
+
+  let versionedArchiveUri = archiveUri </> archiveVersion
 
   mbPlan <- loadPlan
   case mbPlan of
     Right planJson -> do
       let compilerId = planJson ^. the @"compilerId"
       envAws <- mkEnv (opts ^. the @"region") (\_ _ -> pure ())
-      let archivePath = archiveUri </> compilerId
+      let archivePath = versionedArchiveUri </> compilerId
       IO.createLocalDirectoryIfMissing archivePath
       let baseDir = opts ^. the @"storePath"
       CIO.putStrLn "Extracting package list"
@@ -97,7 +101,7 @@ runSyncToArchive opts = do
 
         IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> do
           let archiveFileBasename = packageDir pInfo <.> ".tar.gz"
-          let archiveFile = archiveUri </> T.pack archiveFileBasename
+          let archiveFile = versionedArchiveUri </> T.pack archiveFileBasename
           let packageStorePath = baseDir </> packageDir pInfo
           archiveFileExists <- runResourceT $ IO.resourceExists envAws archiveFile
 
