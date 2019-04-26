@@ -73,9 +73,7 @@ uploadToS3 envAws (AWS.S3Uri b k) lbs = do
 
 writeResource :: MonadUnliftIO m => AWS.Env -> Location -> LBS.ByteString -> m ()
 writeResource envAws loc lbs = case loc of
-  S3 s3Uri   -> do
-    CIO.putStrLn $ "writeResource " <> toText loc
-    uploadToS3 envAws s3Uri lbs
+  S3 s3Uri   -> uploadToS3 envAws s3Uri lbs
   Local path -> liftIO $ LBS.writeFile path lbs
 
 createLocalDirectoryIfMissing :: (MonadCatch m, MonadIO m) => Location -> m ()
@@ -85,7 +83,6 @@ createLocalDirectoryIfMissing = \case
 
 copyS3Uri :: MonadUnliftIO m => AWS.Env -> AWS.S3Uri -> AWS.S3Uri -> ExceptT String m ()
 copyS3Uri envAws (AWS.S3Uri sourceBucket sourceObjectKey) (AWS.S3Uri targetBucket targetObjectKey) = ExceptT $ do
-  liftIO $ CIO.putStrLn $ "copyS3Uri " <> toText targetBucket <> " " <> toText targetObjectKey
   response <- runResourceT $ runAws envAws $ AWS.send (AWS.copyObject targetBucket (toText sourceBucket <> "/" <> toText sourceObjectKey) targetObjectKey)
   let responseCode = response ^. AWS.corsResponseStatus
   if 200 <= responseCode && responseCode < 300
