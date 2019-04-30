@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module HaskellWorks.Ci.Assist.Version where
+module HaskellWorks.CabalCache.Version where
 
 import Data.String
 

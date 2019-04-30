@@ -1,4 +1,4 @@
-module HaskellWorks.Ci.Assist.Text
+module HaskellWorks.CabalCache.Text
   ( maybeStripPrefix
   ) where
 

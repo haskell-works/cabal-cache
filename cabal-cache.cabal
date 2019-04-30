@@ -101,21 +101,21 @@ library
       App.Commands.SyncToArchive
       App.Commands.Version
       App.Static
-      HaskellWorks.Ci.Assist.Core
-      HaskellWorks.Ci.Assist.Hash
-      HaskellWorks.Ci.Assist.IO.Console
-      HaskellWorks.Ci.Assist.GhcPkg
-      HaskellWorks.Ci.Assist.IO.Error
-      HaskellWorks.Ci.Assist.IO.File
-      HaskellWorks.Ci.Assist.IO.Lazy
-      HaskellWorks.Ci.Assist.IO.Tar
-      HaskellWorks.Ci.Assist.Location
-      HaskellWorks.Ci.Assist.Metadata
-      HaskellWorks.Ci.Assist.Options
-      HaskellWorks.Ci.Assist.Show
-      HaskellWorks.Ci.Assist.Text
-      HaskellWorks.Ci.Assist.Types
-      HaskellWorks.Ci.Assist.Version
+      HaskellWorks.CabalCache.Core
+      HaskellWorks.CabalCache.Hash
+      HaskellWorks.CabalCache.IO.Console
+      HaskellWorks.CabalCache.GhcPkg
+      HaskellWorks.CabalCache.IO.Error
+      HaskellWorks.CabalCache.IO.File
+      HaskellWorks.CabalCache.IO.Lazy
+      HaskellWorks.CabalCache.IO.Tar
+      HaskellWorks.CabalCache.Location
+      HaskellWorks.CabalCache.Metadata
+      HaskellWorks.CabalCache.Options
+      HaskellWorks.CabalCache.Show
+      HaskellWorks.CabalCache.Text
+      HaskellWorks.CabalCache.Types
+      HaskellWorks.CabalCache.Version
 
 executable cabal-cache
   import:   base, config

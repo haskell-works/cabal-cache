@@ -4,10 +4,10 @@ module HaskellWorks.Assist.LocationSpec
 ( spec
 ) where
 
-import Antiope.Core                    (toText)
-import Antiope.S3                      (BucketName (..), ObjectKey (..), S3Uri (..))
-import Data.Text                       (Text)
-import HaskellWorks.Ci.Assist.Location
+import Antiope.Core                     (toText)
+import Antiope.S3                       (BucketName (..), ObjectKey (..), S3Uri (..))
+import Data.Text                        (Text)
+import HaskellWorks.CabalCache.Location
 
 import HaskellWorks.Hspec.Hedgehog
 import Hedgehog

@@ -7,45 +7,45 @@ module App.Commands.SyncToArchive
   ( cmdSyncToArchive
   ) where
 
-import Antiope.Core                    (toText)
-import Antiope.Env                     (LogLevel, mkEnv)
-import App.Commands.Options.Parser     (optsSyncToArchive)
-import App.Static                      (homeDirectory)
-import Control.Lens                    hiding ((<.>))
-import Control.Monad                   (unless, when)
+import Antiope.Core                     (toText)
+import Antiope.Env                      (LogLevel, mkEnv)
+import App.Commands.Options.Parser      (optsSyncToArchive)
+import App.Static                       (homeDirectory)
+import Control.Lens                     hiding ((<.>))
+import Control.Monad                    (unless, when)
 import Control.Monad.Except
-import Control.Monad.Trans.Resource    (runResourceT)
-import Data.Generics.Product.Any       (the)
-import Data.List                       (isSuffixOf, (\\))
+import Control.Monad.Trans.Resource     (runResourceT)
+import Data.Generics.Product.Any        (the)
+import Data.List                        (isSuffixOf, (\\))
 import Data.Maybe
-import Data.Semigroup                  ((<>))
-import HaskellWorks.Ci.Assist.Core     (PackageInfo (..), Presence (..), Tagged (..), getPackages, loadPlan, relativePaths)
-import HaskellWorks.Ci.Assist.Location ((<.>), (</>))
-import HaskellWorks.Ci.Assist.Metadata (createMetadata)
-import HaskellWorks.Ci.Assist.Show
-import HaskellWorks.Ci.Assist.Version  (archiveVersion)
-import Options.Applicative             hiding (columns)
-import System.Directory                (createDirectoryIfMissing, doesDirectoryExist)
+import Data.Semigroup                   ((<>))
+import HaskellWorks.CabalCache.Core     (PackageInfo (..), Presence (..), Tagged (..), getPackages, loadPlan, relativePaths)
+import HaskellWorks.CabalCache.Location ((<.>), (</>))
+import HaskellWorks.CabalCache.Metadata (createMetadata)
+import HaskellWorks.CabalCache.Show
+import HaskellWorks.CabalCache.Version  (archiveVersion)
+import Options.Applicative              hiding (columns)
+import System.Directory                 (createDirectoryIfMissing, doesDirectoryExist)
 
-import qualified App.Commands.Options.Types        as Z
-import qualified Codec.Archive.Tar                 as F
-import qualified Codec.Compression.GZip            as F
-import qualified Data.ByteString.Lazy              as LBS
-import qualified Data.ByteString.Lazy.Char8        as LC8
-import qualified Data.Text                         as T
-import qualified HaskellWorks.Ci.Assist.GhcPkg     as GhcPkg
-import qualified HaskellWorks.Ci.Assist.Hash       as H
-import qualified HaskellWorks.Ci.Assist.IO.Console as CIO
-import qualified HaskellWorks.Ci.Assist.IO.Error   as IO
-import qualified HaskellWorks.Ci.Assist.IO.File    as IO
-import qualified HaskellWorks.Ci.Assist.IO.Lazy    as IO
-import qualified HaskellWorks.Ci.Assist.IO.Tar     as IO
-import qualified HaskellWorks.Ci.Assist.Types      as Z
-import qualified System.Directory                  as IO
-import qualified System.FilePath.Posix             as FP
-import qualified System.IO                         as IO
-import qualified System.IO.Temp                    as IO
-import qualified UnliftIO.Async                    as IO
+import qualified App.Commands.Options.Types         as Z
+import qualified Codec.Archive.Tar                  as F
+import qualified Codec.Compression.GZip             as F
+import qualified Data.ByteString.Lazy               as LBS
+import qualified Data.ByteString.Lazy.Char8         as LC8
+import qualified Data.Text                          as T
+import qualified HaskellWorks.CabalCache.GhcPkg     as GhcPkg
+import qualified HaskellWorks.CabalCache.Hash       as H
+import qualified HaskellWorks.CabalCache.IO.Console as CIO
+import qualified HaskellWorks.CabalCache.IO.Error   as IO
+import qualified HaskellWorks.CabalCache.IO.File    as IO
+import qualified HaskellWorks.CabalCache.IO.Lazy    as IO
+import qualified HaskellWorks.CabalCache.IO.Tar     as IO
+import qualified HaskellWorks.CabalCache.Types      as Z
+import qualified System.Directory                   as IO
+import qualified System.FilePath.Posix              as FP
+import qualified System.IO                          as IO
+import qualified System.IO.Temp                     as IO
+import qualified UnliftIO.Async                     as IO
 
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
 {-# ANN module ("HLint: ignore Redundant do"        :: String) #-}

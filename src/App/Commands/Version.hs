@@ -17,10 +17,10 @@ import Data.Semigroup              ((<>))
 import Options.Applicative         hiding (columns)
 import Paths_cabal_cache
 
-import qualified App.Commands.Options.Types        as Z
-import qualified Data.Text                         as T
-import qualified Data.Version                      as V
-import qualified HaskellWorks.Ci.Assist.IO.Console as CIO
+import qualified App.Commands.Options.Types         as Z
+import qualified Data.Text                          as T
+import qualified Data.Version                       as V
+import qualified HaskellWorks.CabalCache.IO.Console as CIO
 
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
 {-# ANN module ("HLint: ignore Redundant do"        :: String) #-}

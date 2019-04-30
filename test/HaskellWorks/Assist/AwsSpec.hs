@@ -11,21 +11,21 @@ import Control.Lens
 import Control.Monad
 import Control.Monad.IO.Class
 import Data.Generics.Product.Any
-import Data.Maybe                     (fromJust, isJust)
-import HaskellWorks.Ci.Assist.IO.Lazy
+import Data.Maybe                      (fromJust, isJust)
+import HaskellWorks.CabalCache.IO.Lazy
 import HaskellWorks.Hspec.Hedgehog
 import Hedgehog
-import System.Environment             (lookupEnv)
+import System.Environment              (lookupEnv)
 import Test.Hspec
 import Text.RawString.QQ
 
-import qualified Antiope.S3.Lazy              as LBS
-import qualified Antiope.S3.Types             as AWS
-import qualified Data.Aeson                   as A
-import qualified Data.ByteString.Lazy         as LBS
-import qualified Data.ByteString.Lazy.Char8   as LBSC
-import qualified HaskellWorks.Ci.Assist.Types as Z
-import qualified System.Environment           as IO
+import qualified Antiope.S3.Lazy               as LBS
+import qualified Antiope.S3.Types              as AWS
+import qualified Data.Aeson                    as A
+import qualified Data.ByteString.Lazy          as LBS
+import qualified Data.ByteString.Lazy.Char8    as LBSC
+import qualified HaskellWorks.CabalCache.Types as Z
+import qualified System.Environment            as IO
 
 {-# ANN module ("HLint: ignore Redundant do"        :: String) #-}
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}

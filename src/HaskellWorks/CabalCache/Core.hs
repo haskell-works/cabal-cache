@@ -5,7 +5,7 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeApplications      #-}
-module HaskellWorks.Ci.Assist.Core
+module HaskellWorks.CabalCache.Core
   ( PackageInfo(..)
   , Tagged(..)
   , Presence(..)
@@ -26,12 +26,12 @@ import Data.Text                 (Text)
 import GHC.Generics              (Generic)
 import System.FilePath           ((<.>), (</>))
 
-import qualified Data.ByteString.Lazy          as LBS
-import qualified Data.List                     as List
-import qualified Data.Text                     as T
-import qualified HaskellWorks.Ci.Assist.IO.Tar as IO
-import qualified HaskellWorks.Ci.Assist.Types  as Z
-import qualified System.Directory              as IO
+import qualified Data.ByteString.Lazy           as LBS
+import qualified Data.List                      as List
+import qualified Data.Text                      as T
+import qualified HaskellWorks.CabalCache.IO.Tar as IO
+import qualified HaskellWorks.CabalCache.Types  as Z
+import qualified System.Directory               as IO
 
 type CompilerId = Text
 type PackageId  = Text

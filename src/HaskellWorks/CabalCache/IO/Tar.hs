@@ -4,26 +4,26 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications  #-}
 
-module HaskellWorks.Ci.Assist.IO.Tar
+module HaskellWorks.CabalCache.IO.Tar
   ( TarGroup(..)
   , createTar
   , extractTar
   ) where
 
-import Control.DeepSeq             (NFData)
+import Control.DeepSeq              (NFData)
 import Control.Lens
 import Control.Monad.Except
-import Control.Monad.IO.Class      (MonadIO, liftIO)
+import Control.Monad.IO.Class       (MonadIO, liftIO)
 import Data.Generics.Product.Any
 import Data.List
 import GHC.Generics
-import HaskellWorks.Ci.Assist.Show
+import HaskellWorks.CabalCache.Show
 
-import qualified Data.Text                         as T
-import qualified HaskellWorks.Ci.Assist.IO.Console as CIO
-import qualified System.Exit                       as IO
-import qualified System.IO                         as IO
-import qualified System.Process                    as IO
+import qualified Data.Text                          as T
+import qualified HaskellWorks.CabalCache.IO.Console as CIO
+import qualified System.Exit                        as IO
+import qualified System.IO                          as IO
+import qualified System.Process                     as IO
 
 data TarGroup = TarGroup
   { basePath   :: FilePath

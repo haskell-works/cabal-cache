@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-module HaskellWorks.Ci.Assist.IO.Lazy
+module HaskellWorks.CabalCache.IO.Lazy
   ( readResource
   , resourceExists
   , firstExistingResource
@@ -14,36 +14,36 @@ module HaskellWorks.Ci.Assist.IO.Lazy
 import Antiope.Core
 import Antiope.S3.Lazy
 import Control.Lens
-import Control.Monad                   (void)
+import Control.Monad                    (void)
 import Control.Monad.Catch
 import Control.Monad.Except
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Resource
-import Data.Conduit.Lazy               (lazyConsume)
-import Data.Either                     (isRight)
-import Data.Text                       (Text)
-import HaskellWorks.Ci.Assist.Location (Location (..))
-import HaskellWorks.Ci.Assist.Show
-import Network.AWS                     (MonadAWS, chunkedFile)
-import Network.AWS.Data.Body           (_streamBody)
+import Data.Conduit.Lazy                (lazyConsume)
+import Data.Either                      (isRight)
+import Data.Text                        (Text)
+import HaskellWorks.CabalCache.Location (Location (..))
+import HaskellWorks.CabalCache.Show
+import Network.AWS                      (MonadAWS, chunkedFile)
+import Network.AWS.Data.Body            (_streamBody)
 
-import qualified Antiope.S3.Lazy                   as AWS
-import qualified Antiope.S3.Types                  as AWS
-import qualified Control.Concurrent                as IO
-import qualified Data.ByteString.Lazy              as LBS
-import qualified Data.Text                         as T
-import qualified Data.Text.IO                      as T
-import qualified HaskellWorks.Ci.Assist.IO.Console as CIO
-import qualified Network.AWS                       as AWS
-import qualified Network.AWS.Data                  as AWS
-import qualified Network.AWS.S3.CopyObject         as AWS
-import qualified Network.AWS.S3.HeadObject         as AWS
-import qualified Network.AWS.S3.PutObject          as AWS
-import qualified Network.HTTP.Types                as HTTP
-import qualified System.Directory                  as IO
-import qualified System.FilePath.Posix             as FP
-import qualified System.IO                         as IO
-import qualified System.IO.Error                   as IO
+import qualified Antiope.S3.Lazy                    as AWS
+import qualified Antiope.S3.Types                   as AWS
+import qualified Control.Concurrent                 as IO
+import qualified Data.ByteString.Lazy               as LBS
+import qualified Data.Text                          as T
+import qualified Data.Text.IO                       as T
+import qualified HaskellWorks.CabalCache.IO.Console as CIO
+import qualified Network.AWS                        as AWS
+import qualified Network.AWS.Data                   as AWS
+import qualified Network.AWS.S3.CopyObject          as AWS
+import qualified Network.AWS.S3.HeadObject          as AWS
+import qualified Network.AWS.S3.PutObject           as AWS
+import qualified Network.HTTP.Types                 as HTTP
+import qualified System.Directory                   as IO
+import qualified System.FilePath.Posix              as FP
+import qualified System.IO                          as IO
+import qualified System.IO.Error                    as IO
 
 {-# ANN module ("HLint: ignore Redundant do"        :: String) #-}
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
