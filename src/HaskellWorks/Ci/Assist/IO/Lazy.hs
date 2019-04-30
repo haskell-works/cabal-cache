@@ -29,6 +29,7 @@ import Network.AWS.Data.Body           (_streamBody)
 
 import qualified Antiope.S3.Lazy                   as AWS
 import qualified Antiope.S3.Types                  as AWS
+import qualified Control.Concurrent                as IO
 import qualified Data.ByteString.Lazy              as LBS
 import qualified Data.Text                         as T
 import qualified Data.Text.IO                      as T
@@ -117,10 +118,18 @@ copyS3Uri envAws (AWS.S3Uri sourceBucket sourceObjectKey) (AWS.S3Uri targetBucke
     then return (Right ())
     else return (Left "")
 
+retry :: MonadIO m => Int -> ExceptT String m () -> ExceptT String m ()
+retry n f = catchError f $ \e -> if n > 0
+  then do
+    liftIO $ CIO.hPutStrLn IO.stderr $ "WARNING: " <> T.pack e <> " (retrying)"
+    liftIO $ IO.threadDelay 1000000
+    retry (n - 1) f
+  else throwError e
+
 linkOrCopyResource :: MonadUnliftIO m => AWS.Env -> Location -> Location -> ExceptT String m ()
 linkOrCopyResource envAws source target = case source of
   S3 sourceS3Uri -> case target of
-    S3 targetS3Uri -> do copyS3Uri envAws sourceS3Uri targetS3Uri
+    S3 targetS3Uri -> retry 3 (copyS3Uri envAws sourceS3Uri targetS3Uri)
     Local _        -> throwError "Can't copy between different file backends"
   Local sourcePath -> case target of
     S3 _             -> throwError "Can't copy between different file backends"
