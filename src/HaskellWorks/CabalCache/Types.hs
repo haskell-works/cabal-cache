@@ -8,6 +8,8 @@ import Data.Aeson
 import Data.Text    (Text)
 import GHC.Generics
 
+type PackageId = Text
+
 data PlanJson = PlanJson
   { compilerId  :: Text
   , installPlan :: [Package]
@@ -20,6 +22,7 @@ data Package = Package
   , version       :: Text
   , style         :: Maybe Text
   , componentName :: Maybe Text
+  , depends       :: Maybe [PackageId]
   } deriving (Eq, Show, Generic)
 
 instance FromJSON PlanJson where
@@ -35,3 +38,4 @@ instance FromJSON Package where
     <*> v .:  "pkg-version"
     <*> v .:? "style"
     <*> v .:? "component-name"
+    <*> v .:? "depends"
