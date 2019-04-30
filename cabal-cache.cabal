@@ -101,6 +101,8 @@ library
       App.Commands.SyncToArchive
       App.Commands.Version
       App.Static
+      HaskellWorks.CabalCache.Concurrent.DownloadQueue
+      HaskellWorks.CabalCache.Concurrent.Type
       HaskellWorks.CabalCache.Core
       HaskellWorks.CabalCache.Data.Relation
       HaskellWorks.CabalCache.Data.Relation.Type
