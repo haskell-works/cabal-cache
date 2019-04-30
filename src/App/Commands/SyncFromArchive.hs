@@ -7,48 +7,48 @@ module App.Commands.SyncFromArchive
   ( cmdSyncFromArchive
   ) where
 
-import Antiope.Core                    (runResAws, toText)
-import Antiope.Env                     (LogLevel, mkEnv)
-import App.Commands.Options.Parser     (optsSyncFromArchive)
-import App.Static                      (homeDirectory)
-import Control.Lens                    hiding ((<.>))
-import Control.Monad                   (unless, void, when)
+import Antiope.Core                     (runResAws, toText)
+import Antiope.Env                      (LogLevel, mkEnv)
+import App.Commands.Options.Parser      (optsSyncFromArchive)
+import App.Static                       (homeDirectory)
+import Control.Lens                     hiding ((<.>))
+import Control.Monad                    (unless, void, when)
 import Control.Monad.Except
-import Control.Monad.IO.Class          (liftIO)
-import Control.Monad.Trans.Resource    (runResourceT)
-import Data.ByteString.Lazy.Search     (replace)
-import Data.Generics.Product.Any       (the)
+import Control.Monad.IO.Class           (liftIO)
+import Control.Monad.Trans.Resource     (runResourceT)
+import Data.ByteString.Lazy.Search      (replace)
+import Data.Generics.Product.Any        (the)
 import Data.Maybe
-import Data.Semigroup                  ((<>))
-import Data.Text                       (Text)
-import HaskellWorks.Ci.Assist.Core     (PackageInfo (..), Presence (..), Tagged (..), getPackages, loadPlan)
-import HaskellWorks.Ci.Assist.IO.Error (exceptWarn, maybeToExcept, maybeToExceptM)
-import HaskellWorks.Ci.Assist.Location ((<.>), (</>))
-import HaskellWorks.Ci.Assist.Metadata (deleteMetadata, loadMetadata)
-import HaskellWorks.Ci.Assist.Show
-import HaskellWorks.Ci.Assist.Version  (archiveVersion)
-import Network.AWS.Types               (Region (Oregon))
-import Options.Applicative             hiding (columns)
-import System.Directory                (createDirectoryIfMissing, doesDirectoryExist)
+import Data.Semigroup                   ((<>))
+import Data.Text                        (Text)
+import HaskellWorks.CabalCache.Core     (PackageInfo (..), Presence (..), Tagged (..), getPackages, loadPlan)
+import HaskellWorks.CabalCache.IO.Error (exceptWarn, maybeToExcept, maybeToExceptM)
+import HaskellWorks.CabalCache.Location ((<.>), (</>))
+import HaskellWorks.CabalCache.Metadata (deleteMetadata, loadMetadata)
+import HaskellWorks.CabalCache.Show
+import HaskellWorks.CabalCache.Version  (archiveVersion)
+import Network.AWS.Types                (Region (Oregon))
+import Options.Applicative              hiding (columns)
+import System.Directory                 (createDirectoryIfMissing, doesDirectoryExist)
 
-import qualified App.Commands.Options.Types        as Z
-import qualified Codec.Archive.Tar                 as F
-import qualified Codec.Compression.GZip            as F
-import qualified Data.ByteString                   as BS
-import qualified Data.ByteString.Char8             as C8
-import qualified Data.ByteString.Lazy              as LBS
-import qualified Data.Map.Strict                   as Map
-import qualified Data.Text                         as T
-import qualified HaskellWorks.Ci.Assist.GhcPkg     as GhcPkg
-import qualified HaskellWorks.Ci.Assist.Hash       as H
-import qualified HaskellWorks.Ci.Assist.IO.Console as CIO
-import qualified HaskellWorks.Ci.Assist.IO.Lazy    as IO
-import qualified HaskellWorks.Ci.Assist.IO.Tar     as IO
-import qualified HaskellWorks.Ci.Assist.Types      as Z
-import qualified System.Directory                  as IO
-import qualified System.IO                         as IO
-import qualified System.IO.Temp                    as IO
-import qualified UnliftIO.Async                    as IO
+import qualified App.Commands.Options.Types         as Z
+import qualified Codec.Archive.Tar                  as F
+import qualified Codec.Compression.GZip             as F
+import qualified Data.ByteString                    as BS
+import qualified Data.ByteString.Char8              as C8
+import qualified Data.ByteString.Lazy               as LBS
+import qualified Data.Map.Strict                    as Map
+import qualified Data.Text                          as T
+import qualified HaskellWorks.CabalCache.GhcPkg     as GhcPkg
+import qualified HaskellWorks.CabalCache.Hash       as H
+import qualified HaskellWorks.CabalCache.IO.Console as CIO
+import qualified HaskellWorks.CabalCache.IO.Lazy    as IO
+import qualified HaskellWorks.CabalCache.IO.Tar     as IO
+import qualified HaskellWorks.CabalCache.Types      as Z
+import qualified System.Directory                   as IO
+import qualified System.IO                          as IO
+import qualified System.IO.Temp                     as IO
+import qualified UnliftIO.Async                     as IO
 
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
 {-# ANN module ("HLint: ignore Redundant do"        :: String) #-}

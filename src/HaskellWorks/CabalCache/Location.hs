@@ -3,7 +3,7 @@
 {-# LANGUAGE MultiWayIf             #-}
 {-# LANGUAGE OverloadedStrings      #-}
 {-# LANGUAGE TypeFamilies           #-}
-module HaskellWorks.Ci.Assist.Location
+module HaskellWorks.CabalCache.Location
 ( IsPath(..)
 , Location(..)
 , toLocation

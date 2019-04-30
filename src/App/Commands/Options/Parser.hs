@@ -1,11 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 module App.Commands.Options.Parser where
 
-import Antiope.Core                    (FromText, Region (..), fromText)
-import App.Commands.Options.Types      (SyncFromArchiveOptions (..), SyncToArchiveOptions (..), VersionOptions (..))
-import App.Static                      (homeDirectory)
+import Antiope.Core                     (FromText, Region (..), fromText)
+import App.Commands.Options.Types       (SyncFromArchiveOptions (..), SyncToArchiveOptions (..), VersionOptions (..))
+import App.Static                       (homeDirectory)
 import Control.Applicative
-import HaskellWorks.Ci.Assist.Location (Location (..), toLocation, (</>))
+import HaskellWorks.CabalCache.Location (Location (..), toLocation, (</>))
 import Options.Applicative
 
 import qualified Data.Text as Text

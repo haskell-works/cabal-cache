@@ -1,5 +1,4 @@
-module HaskellWorks.Ci.Assist.GhcPkg
-where
+module HaskellWorks.CabalCache.GhcPkg where
 
 import Data.Text      (Text)
 import System.Exit    (ExitCode (..), exitWith)

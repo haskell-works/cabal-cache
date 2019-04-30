@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 
-module HaskellWorks.Ci.Assist.IO.Error
+module HaskellWorks.CabalCache.IO.Error
   ( exceptFatal
   , exceptWarn
   , maybeToExcept
@@ -10,10 +10,10 @@ module HaskellWorks.Ci.Assist.IO.Error
 import Control.Monad.Except
 import Control.Monad.IO.Class
 
-import qualified Data.Text                         as T
-import qualified HaskellWorks.Ci.Assist.IO.Console as CIO
-import qualified System.Exit                       as IO
-import qualified System.IO                         as IO
+import qualified Data.Text                          as T
+import qualified HaskellWorks.CabalCache.IO.Console as CIO
+import qualified System.Exit                        as IO
+import qualified System.IO                          as IO
 
 exceptFatal :: MonadIO m => ExceptT String m a -> ExceptT String m a
 exceptFatal f = catchError f handler

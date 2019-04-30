@@ -1,4 +1,4 @@
-module HaskellWorks.Ci.Assist.Hash
+module HaskellWorks.CabalCache.Hash
   ( hashStorePath
   ) where
 

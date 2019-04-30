@@ -13,9 +13,9 @@ import Hedgehog
 import Test.Hspec
 import Text.RawString.QQ
 
-import qualified Data.Aeson                   as A
-import qualified Data.ByteString.Lazy         as LBS
-import qualified HaskellWorks.Ci.Assist.Types as Z
+import qualified Data.Aeson                    as A
+import qualified Data.ByteString.Lazy          as LBS
+import qualified HaskellWorks.CabalCache.Types as Z
 
 {-# ANN module ("HLint: ignore Redundant do"        :: String) #-}
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}

@@ -1,4 +1,4 @@
-module HaskellWorks.Ci.Assist.Options
+module HaskellWorks.CabalCache.Options
   ( readOrFromTextOption
   ) where
 

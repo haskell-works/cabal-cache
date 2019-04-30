@@ -1,13 +1,13 @@
 {-# LANGUAGE TupleSections #-}
-module HaskellWorks.Ci.Assist.Metadata
-where
 
-import Control.Lens                  ((<&>))
-import Control.Monad                 (forM_)
-import Control.Monad.IO.Class        (MonadIO, liftIO)
-import HaskellWorks.Ci.Assist.Core   (PackageInfo (..))
-import HaskellWorks.Ci.Assist.IO.Tar (TarGroup (..))
-import System.FilePath               (makeRelative, takeFileName, (<.>), (</>))
+module HaskellWorks.CabalCache.Metadata where
+
+import Control.Lens                   ((<&>))
+import Control.Monad                  (forM_)
+import Control.Monad.IO.Class         (MonadIO, liftIO)
+import HaskellWorks.CabalCache.Core   (PackageInfo (..))
+import HaskellWorks.CabalCache.IO.Tar (TarGroup (..))
+import System.FilePath                (makeRelative, takeFileName, (<.>), (</>))
 
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Map.Strict      as Map

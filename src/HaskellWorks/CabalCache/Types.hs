@@ -2,7 +2,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings     #-}
 
-module HaskellWorks.Ci.Assist.Types where
+module HaskellWorks.CabalCache.Types where
 
 import Data.Aeson
 import Data.Text    (Text)

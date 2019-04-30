@@ -1,4 +1,4 @@
-module HaskellWorks.Ci.Assist.Show
+module HaskellWorks.CabalCache.Show
   ( tshow
   ) where
 

@@ -3,12 +3,12 @@
 
 module App.Commands.Options.Types where
 
-import Antiope.Env                     (Region)
-import Data.Text                       (Text)
+import Antiope.Env                      (Region)
+import Data.Text                        (Text)
 import GHC.Generics
-import GHC.Word                        (Word8)
-import HaskellWorks.Ci.Assist.Location
-import Network.AWS.Types               (Region)
+import GHC.Word                         (Word8)
+import HaskellWorks.CabalCache.Location
+import Network.AWS.Types                (Region)
 
 data SyncToArchiveOptions = SyncToArchiveOptions
   { region        :: Region

@@ -1,4 +1,4 @@
-module HaskellWorks.Ci.Assist.IO.Console
+module HaskellWorks.CabalCache.IO.Console
   ( putStrLn
   , print
   , hPutStrLn
