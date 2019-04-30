@@ -58,7 +58,7 @@ common config
   default-language:     Haskell2010
 
 library
-  import: base, config
+  import:   base, config
           , aeson
           , amazonka
           , amazonka-core
@@ -86,6 +86,7 @@ library
           , temporary
           , text
           , time
+        
           , unliftio
           , zlib
   other-modules:        Paths_cabal_cache
@@ -138,6 +139,7 @@ test-suite cabal-cache-test
           , lens
           , raw-strings-qq
           , text
+        
   type:                 exitcode-stdio-1.0
   main-is:              Spec.hs
   build-depends:        cabal-cache
