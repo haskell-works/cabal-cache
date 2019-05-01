@@ -102,9 +102,11 @@ library
       App.Commands.Version
       App.Static
       HaskellWorks.CabalCache.Core
+      HaskellWorks.CabalCache.Data.Relation
+      HaskellWorks.CabalCache.Data.Relation.Type
+      HaskellWorks.CabalCache.GhcPkg
       HaskellWorks.CabalCache.Hash
       HaskellWorks.CabalCache.IO.Console
-      HaskellWorks.CabalCache.GhcPkg
       HaskellWorks.CabalCache.IO.Error
       HaskellWorks.CabalCache.IO.File
       HaskellWorks.CabalCache.IO.Lazy
@@ -131,6 +133,7 @@ test-suite cabal-cache-test
           , antiope-core
           , antiope-s3
           , bytestring
+          , containers
           , filepath
           , generic-lens
           , hedgehog
@@ -149,5 +152,6 @@ test-suite cabal-cache-test
   build-tools:          hspec-discover
   other-modules:
       HaskellWorks.CabalCache.AwsSpec
+      HaskellWorks.CabalCache.Data.RelationSpec
       HaskellWorks.CabalCache.LocationSpec
       HaskellWorks.CabalCache.QuerySpec
