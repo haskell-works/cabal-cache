@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes       #-}
 
-module HaskellWorks.Assist.QuerySpec
+module HaskellWorks.CabalCache.QuerySpec
   ( spec
   ) where
 

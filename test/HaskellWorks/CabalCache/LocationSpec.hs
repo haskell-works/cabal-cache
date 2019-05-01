@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE OverloadedStrings #-}
-module HaskellWorks.Assist.LocationSpec
+module HaskellWorks.CabalCache.LocationSpec
 ( spec
 ) where
 

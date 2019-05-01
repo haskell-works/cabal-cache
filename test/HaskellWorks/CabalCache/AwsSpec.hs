@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module HaskellWorks.Assist.AwsSpec
+module HaskellWorks.CabalCache.AwsSpec
   ( spec
   ) where
 
@@ -32,7 +32,7 @@ import qualified System.Environment            as IO
 {-# ANN module ("HLint: ignore Redundant bracket"   :: String) #-}
 
 spec :: Spec
-spec = describe "HaskellWorks.Assist.QuerySpec" $ do
+spec = describe "HaskellWorks.CabalCache.QuerySpec" $ do
   it "stub" $ requireTest $ do
     ci <- liftIO $ IO.lookupEnv "CI" <&> isJust
     unless ci $ do

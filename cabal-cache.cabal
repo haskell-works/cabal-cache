@@ -148,6 +148,6 @@ test-suite cabal-cache-test
   ghc-options:          -threaded -rtsopts -with-rtsopts=-N
   build-tools:          hspec-discover
   other-modules:
-      HaskellWorks.Assist.AwsSpec
-      HaskellWorks.Assist.LocationSpec
-      HaskellWorks.Assist.QuerySpec
+      HaskellWorks.CabalCache.AwsSpec
+      HaskellWorks.CabalCache.LocationSpec
+      HaskellWorks.CabalCache.QuerySpec
