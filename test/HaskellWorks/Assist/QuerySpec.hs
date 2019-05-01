@@ -35,6 +35,10 @@ spec = describe "HaskellWorks.Assist.QuerySpec" $ do
           , Z.version       = "2.4.0.1"
           , Z.style         = Nothing
           , Z.componentName = Nothing
+          , Z.depends       = Just
+            [ "array-0.5.3.0"
+            , "base-4.12.0.0"
+            ]
           }
         ]
       }
