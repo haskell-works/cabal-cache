@@ -8,7 +8,7 @@ module App.Commands.SyncToArchive
   ) where
 
 import Antiope.Core                     (toText)
-import Antiope.Env                      (LogLevel, mkEnv)
+import Antiope.Env                      (LogLevel (..), mkEnv)
 import App.Commands.Options.Parser      (optsSyncToArchive)
 import App.Static                       (homeDirectory)
 import Control.Lens                     hiding ((<.>))
@@ -33,6 +33,8 @@ import qualified Codec.Compression.GZip             as F
 import qualified Data.ByteString.Lazy               as LBS
 import qualified Data.ByteString.Lazy.Char8         as LC8
 import qualified Data.Text                          as T
+import qualified Data.Text.Encoding                 as T
+import qualified HaskellWorks.CabalCache.AWS.Env    as AWS
 import qualified HaskellWorks.CabalCache.GhcPkg     as GhcPkg
 import qualified HaskellWorks.CabalCache.Hash       as H
 import qualified HaskellWorks.CabalCache.IO.Console as CIO
@@ -69,7 +71,7 @@ runSyncToArchive opts = do
   case mbPlan of
     Right planJson -> do
       let compilerId = planJson ^. the @"compilerId"
-      envAws <- mkEnv (opts ^. the @"region") (\_ _ -> pure ())
+      envAws <- mkEnv (opts ^. the @"region") AWS.awsLogger
       let archivePath       = versionedArchiveUri </> compilerId
       let scopedArchivePath = scopedArchiveUri </> compilerId
       IO.createLocalDirectoryIfMissing archivePath

@@ -116,7 +116,9 @@ copyS3Uri envAws (AWS.S3Uri sourceBucket sourceObjectKey) (AWS.S3Uri targetBucke
   let responseCode = response ^. AWS.corsResponseStatus
   if 200 <= responseCode && responseCode < 300
     then return (Right ())
-    else return (Left "")
+    else do
+      liftIO $ CIO.hPutStrLn IO.stderr $ "Error in S3 copy: " <> tshow response
+      return (Left "")
 
 retry :: MonadIO m => Int -> ExceptT String m () -> ExceptT String m ()
 retry n f = catchError f $ \e -> if n > 0
