@@ -1,14 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
+
 module App.Commands.Options.Parser where
 
 import Antiope.Core                     (FromText, Region (..), fromText)
+import Antiope.Options.Applicative
 import App.Commands.Options.Types       (SyncFromArchiveOptions (..), SyncToArchiveOptions (..), VersionOptions (..))
 import App.Static                       (homeDirectory)
 import Control.Applicative
 import HaskellWorks.CabalCache.Location (Location (..), toLocation, (</>))
 import Options.Applicative
 
-import qualified Data.Text as Text
+import qualified Data.Text         as Text
+import qualified Network.AWS.Types as AWS
 
 optsSyncFromArchive :: Parser SyncFromArchiveOptions
 optsSyncFromArchive = SyncFromArchiveOptions
@@ -43,6 +46,13 @@ optsSyncFromArchive = SyncFromArchiveOptions
       <>  metavar "NUM_THREADS"
       <>  value 4
       )
+  <*> optional
+      ( option autoText
+        (   long "aws-log-level"
+        <>  help "AWS Log Level.  One of (Error, Info, Debug, Trace)"
+        <>  metavar "AWS_LOG_LEVEL"
+        )
+      )
 
 optsSyncToArchive :: Parser SyncToArchiveOptions
 optsSyncToArchive = SyncToArchiveOptions
@@ -76,6 +86,13 @@ optsSyncToArchive = SyncToArchiveOptions
       <>  help "Number of concurrent threads"
       <>  metavar "NUM_THREADS"
       <>  value 4
+      )
+  <*> optional
+      ( option autoText
+        (   long "aws-log-level"
+        <>  help "AWS Log Level.  One of (Error, Info, Debug, Trace)"
+        <>  metavar "AWS_LOG_LEVEL"
+        )
       )
 
 optsVersion :: Parser VersionOptions

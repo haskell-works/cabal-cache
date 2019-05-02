@@ -59,6 +59,7 @@ runSyncFromArchive opts = do
   let storePath           = opts ^. the @"storePath"
   let archiveUri          = opts ^. the @"archiveUri"
   let threads             = opts ^. the @"threads"
+  let awsLogLevel         = opts ^. the @"awsLogLevel"
   let versionedArchiveUri = archiveUri </> archiveVersion
   let storePathHash       = opts ^. the @"storePathHash" & fromMaybe (H.hashStorePath storePath)
   let scopedArchiveUri    = versionedArchiveUri </> T.pack storePathHash
@@ -68,13 +69,14 @@ runSyncFromArchive opts = do
   CIO.putStrLn $ "Archive URI: "      <> toText archiveUri
   CIO.putStrLn $ "Archive version: "  <> archiveVersion
   CIO.putStrLn $ "Threads: "          <> tshow threads
+  CIO.putStrLn $ "AWS Log level: "    <> tshow awsLogLevel
 
   GhcPkg.testAvailability
 
   mbPlan <- loadPlan
   case mbPlan of
     Right planJson -> do
-      envAws <- mkEnv (opts ^. the @"region") AWS.awsLogger
+      envAws <- mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
       let compilerId                  = planJson ^. the @"compilerId"
       let archivePath                 = versionedArchiveUri </> compilerId
       let storeCompilerPath           = storePath </> T.unpack compilerId

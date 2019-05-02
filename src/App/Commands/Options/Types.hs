@@ -10,12 +10,15 @@ import GHC.Word                         (Word8)
 import HaskellWorks.CabalCache.Location
 import Network.AWS.Types                (Region)
 
+import qualified Antiope.Env as AWS
+
 data SyncToArchiveOptions = SyncToArchiveOptions
   { region        :: Region
   , archiveUri    :: Location
   , storePath     :: FilePath
   , storePathHash :: Maybe String
   , threads       :: Int
+  , awsLogLevel   :: Maybe AWS.LogLevel
   } deriving (Eq, Show, Generic)
 
 data SyncFromArchiveOptions = SyncFromArchiveOptions
@@ -24,6 +27,7 @@ data SyncFromArchiveOptions = SyncFromArchiveOptions
   , storePath     :: FilePath
   , storePathHash :: Maybe String
   , threads       :: Int
+  , awsLogLevel   :: Maybe AWS.LogLevel
   } deriving (Eq, Show, Generic)
 
 data VersionOptions = VersionOptions deriving (Eq, Show, Generic)
