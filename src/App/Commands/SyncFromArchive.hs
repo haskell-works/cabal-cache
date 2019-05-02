@@ -39,6 +39,7 @@ import qualified Data.ByteString.Char8              as C8
 import qualified Data.ByteString.Lazy               as LBS
 import qualified Data.Map.Strict                    as Map
 import qualified Data.Text                          as T
+import qualified HaskellWorks.CabalCache.AWS.Env    as AWS
 import qualified HaskellWorks.CabalCache.GhcPkg     as GhcPkg
 import qualified HaskellWorks.CabalCache.Hash       as H
 import qualified HaskellWorks.CabalCache.IO.Console as CIO
@@ -73,7 +74,7 @@ runSyncFromArchive opts = do
   mbPlan <- loadPlan
   case mbPlan of
     Right planJson -> do
-      envAws <- mkEnv (opts ^. the @"region") (\_ _ -> pure ())
+      envAws <- mkEnv (opts ^. the @"region") AWS.awsLogger
       let compilerId                  = planJson ^. the @"compilerId"
       let archivePath                 = versionedArchiveUri </> compilerId
       let storeCompilerPath           = storePath </> T.unpack compilerId
