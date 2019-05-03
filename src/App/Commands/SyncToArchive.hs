@@ -57,6 +57,7 @@ runSyncToArchive opts = do
   let storePath           = opts ^. the @"storePath"
   let archiveUri          = opts ^. the @"archiveUri"
   let threads             = opts ^. the @"threads"
+  let awsLogLevel         = opts ^. the @"awsLogLevel"
   let versionedArchiveUri = archiveUri </> archiveVersion
   let storePathHash       = opts ^. the @"storePathHash" & fromMaybe (H.hashStorePath storePath)
   let scopedArchiveUri    = versionedArchiveUri </> T.pack storePathHash
@@ -66,12 +67,13 @@ runSyncToArchive opts = do
   CIO.putStrLn $ "Archive URI: "      <> toText archiveUri
   CIO.putStrLn $ "Archive version: "  <> archiveVersion
   CIO.putStrLn $ "Threads: "          <> tshow threads
+  CIO.putStrLn $ "AWS Log level: "    <> tshow awsLogLevel
 
   mbPlan <- loadPlan
   case mbPlan of
     Right planJson -> do
       let compilerId = planJson ^. the @"compilerId"
-      envAws <- mkEnv (opts ^. the @"region") AWS.awsLogger
+      envAws <- mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
       let archivePath       = versionedArchiveUri </> compilerId
       let scopedArchivePath = scopedArchiveUri </> compilerId
       IO.createLocalDirectoryIfMissing archivePath
