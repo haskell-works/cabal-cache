@@ -24,4 +24,5 @@ type ProviderId = PackageId
 data DownloadQueue = DownloadQueue
   { tDependencies :: STM.TVar (R.Relation ConsumerId ProviderId)
   , tUploading    :: STM.TVar (S.Set PackageId)
+  , tFailures     :: STM.TVar (S.Set PackageId)
   } deriving Generic

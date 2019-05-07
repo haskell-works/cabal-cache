@@ -1,6 +1,7 @@
-{-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes       #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE QuasiQuotes           #-}
 
 module HaskellWorks.CabalCache.QuerySpec
   ( spec
@@ -35,10 +36,12 @@ spec = describe "HaskellWorks.Assist.QuerySpec" $ do
           , Z.version       = "2.4.0.1"
           , Z.style         = Nothing
           , Z.componentName = Nothing
+          , Z.components    = Nothing
           , Z.depends       =
             [ "array-0.5.3.0"
             , "base-4.12.0.0"
             ]
+          , Z.exeDepends    = []
           }
         ]
       }

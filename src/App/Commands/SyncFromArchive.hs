@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE TypeApplications    #-}
 
 module App.Commands.SyncFromArchive
@@ -18,6 +19,7 @@ import Control.Monad.IO.Class           (liftIO)
 import Control.Monad.Trans.Resource     (runResourceT)
 import Data.ByteString.Lazy.Search      (replace)
 import Data.Generics.Product.Any        (the)
+import Data.List                        (nub, sort)
 import Data.Maybe
 import Data.Semigroup                   ((<>))
 import Data.Text                        (Text)
@@ -26,33 +28,44 @@ import HaskellWorks.CabalCache.IO.Error (exceptWarn, maybeToExcept, maybeToExcep
 import HaskellWorks.CabalCache.Location ((<.>), (</>))
 import HaskellWorks.CabalCache.Metadata (deleteMetadata, loadMetadata)
 import HaskellWorks.CabalCache.Show
+import HaskellWorks.CabalCache.Topology (buildPlanData)
 import HaskellWorks.CabalCache.Version  (archiveVersion)
 import Network.AWS.Types                (Region (Oregon))
 import Options.Applicative              hiding (columns)
 import System.Directory                 (createDirectoryIfMissing, doesDirectoryExist)
 
-import qualified App.Commands.Options.Types         as Z
-import qualified Codec.Archive.Tar                  as F
-import qualified Codec.Compression.GZip             as F
-import qualified Data.ByteString                    as BS
-import qualified Data.ByteString.Char8              as C8
-import qualified Data.ByteString.Lazy               as LBS
-import qualified Data.Map.Strict                    as Map
-import qualified Data.Text                          as T
-import qualified HaskellWorks.CabalCache.AWS.Env    as AWS
-import qualified HaskellWorks.CabalCache.GhcPkg     as GhcPkg
-import qualified HaskellWorks.CabalCache.Hash       as H
-import qualified HaskellWorks.CabalCache.IO.Console as CIO
-import qualified HaskellWorks.CabalCache.IO.Lazy    as IO
-import qualified HaskellWorks.CabalCache.IO.Tar     as IO
-import qualified HaskellWorks.CabalCache.Types      as Z
-import qualified System.Directory                   as IO
-import qualified System.IO                          as IO
-import qualified System.IO.Temp                     as IO
-import qualified UnliftIO.Async                     as IO
+import qualified App.Commands.Options.Types                       as Z
+import qualified Codec.Archive.Tar                                as F
+import qualified Codec.Compression.GZip                           as F
+import qualified Control.Concurrent                               as IO
+import qualified Control.Concurrent.STM                           as STM
+import qualified Data.ByteString                                  as BS
+import qualified Data.ByteString.Char8                            as C8
+import qualified Data.ByteString.Lazy                             as LBS
+import qualified Data.Map                                         as M
+import qualified Data.Map.Strict                                  as Map
+import qualified Data.Set                                         as S
+import qualified Data.Text                                        as T
+import qualified HaskellWorks.CabalCache.AWS.Env                  as AWS
+import qualified HaskellWorks.CabalCache.Concurrent.DownloadQueue as DQ
+import qualified HaskellWorks.CabalCache.Concurrent.Fork          as IO
+import qualified HaskellWorks.CabalCache.Data.Relation            as R
+import qualified HaskellWorks.CabalCache.GhcPkg                   as GhcPkg
+import qualified HaskellWorks.CabalCache.Hash                     as H
+import qualified HaskellWorks.CabalCache.IO.Console               as CIO
+import qualified HaskellWorks.CabalCache.IO.Lazy                  as IO
+import qualified HaskellWorks.CabalCache.IO.Tar                   as IO
+import qualified HaskellWorks.CabalCache.Types                    as Z
+import qualified System.Directory                                 as IO
+import qualified System.IO                                        as IO
+import qualified System.IO.Temp                                   as IO
+import qualified UnliftIO.Async                                   as IO
 
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
 {-# ANN module ("HLint: ignore Redundant do"        :: String) #-}
+
+skippable :: Z.Package -> Bool
+skippable package = (package ^. the @"packageType" == "pre-existing")
 
 runSyncFromArchive :: Z.SyncFromArchiveOptions -> IO ()
 runSyncFromArchive opts = do
@@ -80,9 +93,6 @@ runSyncFromArchive opts = do
       let compilerId                  = planJson ^. the @"compilerId"
       let archivePath                 = versionedArchiveUri </> compilerId
       let storeCompilerPath           = storePath </> T.unpack compilerId
-      -- xx let scopedArchivePath           = scopedArchiveUri </> compilerId
-      -- xx let baseDir                     = opts ^. the @"storePath"
-      -- xx let storeCompilerPath           = baseDir </> T.unpack compilerId
       let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"
       let storeCompilerLibPath        = storeCompilerPath </> "lib"
 
@@ -99,57 +109,110 @@ runSyncFromArchive opts = do
 
       packages <- getPackages storePath planJson
 
+      let installPlan = planJson ^. the @"installPlan"
+      let planPackages = M.fromList $ fmap (\p -> (p ^. the @"id", p)) installPlan
+
+      let planData = buildPlanData planJson (packages ^.. each . the @"packageId")
+
+      let planDeps0 = installPlan >>= \p -> fmap (p ^. the @"id", ) $ mempty
+            <> (p ^. the @"depends")
+            <> (p ^. the @"exeDepends")
+            <> (p ^.. the @"components" . each . the @"lib" . each . the @"depends"    . each)
+            <> (p ^.. the @"components" . each . the @"lib" . each . the @"exeDepends" . each)
+      let planDeps  = planDeps0 <> fmap (\p -> ("[universe]", p ^. the @"id")) installPlan
+
+      downloadQueue <- STM.atomically $ DQ.createDownloadQueue planDeps
+
+      let pInfos = M.fromList $ fmap (\p -> (p ^. the @"packageId", p)) packages
+
+      -- forM_ planDeps $ \(a, b) -> do
+      --   let maybeName = M.lookup a planPackages <&> (^. the @"name")
+      --   case maybeName of
+      --     Just name -> CIO.putStrLn $ name <> " " <> a <> " -> " <> b
+      --     Nothing   -> CIO.putStrLn $ "*********" <> a <> " -> " <> b
+
       IO.withSystemTempDirectory "cabal-cache" $ \tempPath -> do
         IO.createDirectoryIfMissing True (tempPath </> T.unpack compilerId </> "package.db")
 
-        IO.pooledForConcurrentlyN_ threads packages $ \pInfo -> do
-          let archiveBaseName   = packageDir pInfo <.> ".tar.gz"
-          let archiveFile       = versionedArchiveUri </> T.pack archiveBaseName
-          let scopedArchiveFile = scopedArchiveUri </> T.pack archiveBaseName
-          let packageStorePath  = storePath </> packageDir pInfo
-          storeDirectoryExists <- doesDirectoryExist packageStorePath
-          unless storeDirectoryExists $ do
-            maybeExistingArchiveFile <- IO.firstExistingResource envAws [scopedArchiveFile, archiveFile]
-            forM_ maybeExistingArchiveFile $ \existingArchiveFile -> do
-              CIO.putStrLn $ "Extracting: " <> toText existingArchiveFile
-              void $ runResAws envAws $ onErrorClean packageStorePath $ do
-                maybeArchiveFileContents <- IO.readResource envAws existingArchiveFile
+        IO.forkThreadsWait threads $ DQ.runQueue downloadQueue $ \packageId -> case M.lookup packageId pInfos of
+          Just pInfo -> do
+            let archiveBaseName   = packageDir pInfo <.> ".tar.gz"
+            let archiveFile       = versionedArchiveUri </> T.pack archiveBaseName
+            let scopedArchiveFile = scopedArchiveUri </> T.pack archiveBaseName
+            let packageStorePath  = storePath </> packageDir pInfo
+            storeDirectoryExists <- doesDirectoryExist packageStorePath
+            let maybePackage = M.lookup packageId planPackages
 
-                case maybeArchiveFileContents of
-                  Just archiveFileContents -> do
-                    existingArchiveFileContents <- IO.readResource envAws existingArchiveFile & maybeToExceptM ("Archive unavailable: " <> show (toText archiveFile))
-                    let tempArchiveFile = tempPath </> archiveBaseName
-                    liftIO $ LBS.writeFile tempArchiveFile existingArchiveFileContents
-                    IO.extractTar tempArchiveFile storePath
+            case maybePackage of
+              Nothing -> do
+                CIO.hPutStrLn IO.stderr $ "Warning: package not found" <> packageId
+                return True
+              Just package -> if skippable package
+                then do
+                  CIO.putStrLn $ "Skipping: " <> packageId
+                  return True
+                else if storeDirectoryExists
+                  then return True
+                  else do
+                    maybeExistingArchiveFile <- IO.firstExistingResource envAws [scopedArchiveFile, archiveFile]
+                    case maybeExistingArchiveFile of
+                      Just existingArchiveFile -> do
+                        CIO.putStrLn $ "Extracting: " <> toText existingArchiveFile
+                        runResAws envAws $ onErrorClean packageStorePath False $ do
+                          maybeArchiveFileContents <- IO.readResource envAws existingArchiveFile
 
-                    meta <- loadMetadata packageStorePath
-                    oldStorePath <- maybeToExcept "store-path is missing from Metadata" (Map.lookup "store-path" meta)
+                          case maybeArchiveFileContents of
+                            Just archiveFileContents -> do
+                              existingArchiveFileContents <- IO.readResource envAws existingArchiveFile & maybeToExceptM ("Archive unavailable: " <> show (toText archiveFile))
+                              let tempArchiveFile = tempPath </> archiveBaseName
+                              liftIO $ LBS.writeFile tempArchiveFile existingArchiveFileContents
+                              IO.extractTar tempArchiveFile storePath
 
-                    case confPath pInfo of
-                      Tagged conf _ -> do
-                        let theConfPath = storePath </> conf
-                        let tempConfPath = tempPath </> conf
-                        confPathExists <- liftIO $ IO.doesFileExist theConfPath
-                        when confPathExists $ do
-                          confContents <- liftIO $ LBS.readFile theConfPath
-                          liftIO $ LBS.writeFile tempConfPath (replace (LBS.toStrict oldStorePath) (C8.pack storePath) confContents)
-                          liftIO $ IO.renamePath tempConfPath theConfPath
-                  Nothing -> do
-                    CIO.putStrLn $ "Archive unavailable: " <> toText existingArchiveFile
+                              meta <- loadMetadata packageStorePath
+                              oldStorePath <- maybeToExcept "store-path is missing from Metadata" (Map.lookup "store-path" meta)
 
-                    deleteMetadata packageStorePath
+                              case confPath pInfo of
+                                Tagged conf _ -> do
+                                  let theConfPath = storePath </> conf
+                                  let tempConfPath = tempPath </> conf
+                                  confPathExists <- liftIO $ IO.doesFileExist theConfPath
+                                  when confPathExists $ do
+                                    confContents <- liftIO $ LBS.readFile theConfPath
+                                    liftIO $ LBS.writeFile tempConfPath (replace (LBS.toStrict oldStorePath) (C8.pack storePath) confContents)
+                                    liftIO $ IO.renamePath tempConfPath theConfPath
+                                  return True
+                            Nothing -> do
+                              CIO.putStrLn $ "Archive unavailable: " <> toText existingArchiveFile
+                              deleteMetadata packageStorePath
+                              return False
+                      Nothing -> do
+                        CIO.hPutStrLn IO.stderr $ "Warning: Sync failure: " <> packageId
+                        return False
+          Nothing -> do
+            CIO.hPutStrLn IO.stderr $ "Warning: Invalid package id: " <> packageId
+            return True
+
+      dependenciesRemaining <- STM.atomically $ STM.readTVar (downloadQueue ^. the @"tDependencies")
 
       CIO.putStrLn "Recaching package database"
       GhcPkg.recache storeCompilerPackageDbPath
+
+      failures <- STM.atomically $ STM.readTVar $ downloadQueue ^. the @"tFailures"
+
+      forM_ failures $ \packageId -> CIO.hPutStrLn IO.stderr $ "Failed to download: " <> packageId
 
     Left errorMessage -> do
       CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> T.pack errorMessage
 
   return ()
 
-onErrorClean :: MonadIO m => FilePath -> ExceptT String m () -> m ()
-onErrorClean pkgStorePath f =
-  void $ runExceptT $ exceptWarn f `catchError` (\e -> liftIO $ IO.removeDirectoryRecursive pkgStorePath)
+onErrorClean :: MonadIO m => FilePath -> a -> ExceptT String m a -> m a
+onErrorClean pkgStorePath failureValue f = do
+  result <- runExceptT $ catchError (exceptWarn f) handler
+  case result of
+    Left a  -> return failureValue
+    Right a -> return a
+  where handler e = liftIO (IO.removeDirectoryRecursive pkgStorePath) >> return failureValue
 
 cmdSyncFromArchive :: Mod CommandFields (IO ())
 cmdSyncFromArchive = command "sync-from-archive"  $ flip info idm $ runSyncFromArchive <$> optsSyncFromArchive

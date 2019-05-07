@@ -66,9 +66,9 @@ getPackages basePath planJson = forM packages (mkPackageInfo basePath compilerId
   where compilerId :: Text
         compilerId = planJson ^. the @"compilerId"
         packages :: [Z.Package]
-        packages = planJson ^.. the @"installPlan" . each . filtered predicate
+        packages = planJson ^. the @"installPlan"
         predicate :: Z.Package -> Bool
-        predicate package = package ^. the @"packageType" /= "pre-existing" && package ^. the @"style" == Just "global"
+        predicate package = True
 
 loadPlan :: IO (Either String Z.PlanJson)
 loadPlan =

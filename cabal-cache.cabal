@@ -109,6 +109,7 @@ library
       App.Static
       HaskellWorks.CabalCache.AWS.Env
       HaskellWorks.CabalCache.Concurrent.DownloadQueue
+      HaskellWorks.CabalCache.Concurrent.Fork
       HaskellWorks.CabalCache.Concurrent.Type
       HaskellWorks.CabalCache.Core
       HaskellWorks.CabalCache.Data.Relation
