@@ -1,9 +1,11 @@
-{-# LANGUAGE DataKinds       #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module HaskellWorks.CabalCache.Concurrent.DownloadQueue
   ( createDownloadQueue
   , anchor
+  , runQueue
   ) where
 
 import Control.Lens
@@ -18,6 +20,7 @@ import qualified Data.Set                                as S
 import qualified Data.Text                               as T
 import qualified HaskellWorks.CabalCache.Concurrent.Type as Z
 import qualified HaskellWorks.CabalCache.Data.Relation   as R
+import qualified HaskellWorks.CabalCache.IO.Console      as CIO
 
 anchor :: Z.PackageId -> M.Map Z.ConsumerId Z.ProviderId -> M.Map Z.ConsumerId Z.ProviderId
 anchor root dependencies = M.union dependencies $ M.singleton root (mconcat (M.elems dependencies))
@@ -26,20 +29,24 @@ createDownloadQueue :: [(Z.ProviderId, Z.ConsumerId)] -> STM.STM Z.DownloadQueue
 createDownloadQueue dependencies = do
   tDependencies <- STM.newTVar (R.fromList dependencies)
   tUploading    <- STM.newTVar S.empty
+  tFailures     <- STM.newTVar S.empty
   return Z.DownloadQueue {..}
 
 takeReady :: Z.DownloadQueue -> STM.STM (Maybe Z.PackageId)
 takeReady Z.DownloadQueue {..} = do
   dependencies  <- STM.readTVar tDependencies
   uploading     <- STM.readTVar tUploading
+  failures      <- STM.readTVar tFailures
 
-  let ready = R.range dependencies \\ R.domain dependencies \\ uploading
+  let ready = R.range dependencies \\ R.domain dependencies \\ uploading \\ failures
 
   case S.lookupMin ready of
     Just packageId -> do
       STM.writeTVar tUploading (S.insert packageId uploading)
       return (Just packageId)
-    Nothing -> return Nothing
+    Nothing -> if S.null (R.range dependencies \\ R.domain dependencies \\ failures)
+      then return Nothing
+      else STM.retry
 
 commit :: Z.DownloadQueue -> Z.PackageId -> STM.STM ()
 commit Z.DownloadQueue {..} packageId = do
@@ -49,12 +56,25 @@ commit Z.DownloadQueue {..} packageId = do
   STM.writeTVar tUploading    $ S.delete packageId uploading
   STM.writeTVar tDependencies $ R.withoutRange (S.singleton packageId) dependencies
 
-runQueue :: MonadIO m => Z.DownloadQueue -> (Z.PackageId -> m ()) -> m ()
+failDownload :: Z.DownloadQueue -> Z.PackageId -> STM.STM ()
+failDownload Z.DownloadQueue {..} packageId = do
+  uploading <- STM.readTVar tUploading
+  failures  <- STM.readTVar tFailures
+
+  STM.writeTVar tUploading  $ S.delete packageId uploading
+  STM.writeTVar tFailures   $ S.insert packageId failures
+
+runQueue :: MonadIO m => Z.DownloadQueue -> (Z.PackageId -> m Bool) -> m ()
 runQueue downloadQueue@Z.DownloadQueue {..} f = do
   maybePackageId <- liftIO $ STM.atomically $ takeReady downloadQueue
 
   case maybePackageId of
     Just packageId -> do
-      f packageId
-      liftIO $ STM.atomically $ commit downloadQueue packageId
-    Nothing -> return ()
+      success <- f packageId
+      if success
+        then liftIO $ STM.atomically $ commit downloadQueue packageId
+        else liftIO $ STM.atomically $ failDownload downloadQueue packageId
+      runQueue downloadQueue f
+
+    Nothing -> do
+      return ()
