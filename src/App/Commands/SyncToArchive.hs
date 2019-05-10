@@ -108,7 +108,6 @@ runSyncToArchive opts = do
 
         IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> do
           earlyExit <- STM.readTVarIO tEarlyExit
-          CIO.putStrLn $ "Stuff"
           unless earlyExit $ do
             let archiveFileBasename = packageDir pInfo <.> ".tar.gz"
             let archiveFile         = versionedArchiveUri </> T.pack archiveFileBasename
