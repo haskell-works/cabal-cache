@@ -14,17 +14,20 @@ module HaskellWorks.CabalCache.Core
   , loadPlan
   ) where
 
-import Control.DeepSeq           (NFData)
-import Control.Lens              hiding ((<.>))
-import Control.Monad             (forM)
-import Data.Aeson                (eitherDecode)
-import Data.Bool                 (bool)
-import Data.Generics.Product.Any (the)
-import Data.Maybe                (maybeToList)
-import Data.Semigroup            ((<>))
-import Data.Text                 (Text)
-import GHC.Generics              (Generic)
-import System.FilePath           ((<.>), (</>))
+import Control.DeepSeq                  (NFData)
+import Control.Lens                     hiding ((<.>))
+import Control.Monad                    (forM)
+import Data.Aeson                       (eitherDecode)
+import Data.Bifunctor                   (first)
+import Data.Bool                        (bool)
+import Data.Generics.Product.Any        (the)
+import Data.Maybe                       (maybeToList)
+import Data.Semigroup                   ((<>))
+import Data.String
+import Data.Text                        (Text)
+import GHC.Generics                     (Generic)
+import HaskellWorks.CabalCache.AppError
+import System.FilePath                  ((<.>), (</>))
 
 import qualified Data.ByteString.Lazy           as LBS
 import qualified Data.List                      as List
@@ -70,9 +73,8 @@ getPackages basePath planJson = forM packages (mkPackageInfo basePath compilerId
         predicate :: Z.Package -> Bool
         predicate package = True
 
-loadPlan :: IO (Either String Z.PlanJson)
-loadPlan =
-  eitherDecode <$> LBS.readFile ("dist-newstyle" </> "cache" </> "plan.json")
+loadPlan :: IO (Either AppError Z.PlanJson)
+loadPlan = (first fromString . eitherDecode) <$> LBS.readFile ("dist-newstyle" </> "cache" </> "plan.json")
 
 -------------------------------------------------------------------------------
 mkPackageInfo :: FilePath -> Z.CompilerId -> Z.Package -> IO PackageInfo

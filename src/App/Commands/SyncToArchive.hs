@@ -1,4 +1,6 @@
+{-# LANGUAGE BlockArguments      #-}
 {-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
@@ -19,6 +21,7 @@ import Data.Generics.Product.Any        (the)
 import Data.List                        (isSuffixOf, (\\))
 import Data.Maybe
 import Data.Semigroup                   ((<>))
+import HaskellWorks.CabalCache.AppError
 import HaskellWorks.CabalCache.Core     (PackageInfo (..), Presence (..), Tagged (..), getPackages, loadPlan, relativePaths)
 import HaskellWorks.CabalCache.Location ((<.>), (</>))
 import HaskellWorks.CabalCache.Metadata (createMetadata)
@@ -31,6 +34,7 @@ import System.Directory                 (createDirectoryIfMissing, doesDirectory
 import qualified App.Commands.Options.Types         as Z
 import qualified Codec.Archive.Tar                  as F
 import qualified Codec.Compression.GZip             as F
+import qualified Control.Concurrent.STM             as STM
 import qualified Data.ByteString.Lazy               as LBS
 import qualified Data.ByteString.Lazy.Char8         as LC8
 import qualified Data.Set                           as Set
@@ -45,6 +49,7 @@ import qualified HaskellWorks.CabalCache.IO.File    as IO
 import qualified HaskellWorks.CabalCache.IO.Lazy    as IO
 import qualified HaskellWorks.CabalCache.IO.Tar     as IO
 import qualified HaskellWorks.CabalCache.Types      as Z
+import qualified Network.HTTP.Types                 as HTTP
 import qualified System.Directory                   as IO
 import qualified System.FilePath.Posix              as FP
 import qualified System.IO                          as IO
@@ -71,6 +76,8 @@ runSyncToArchive opts = do
   CIO.putStrLn $ "Threads: "          <> tshow threads
   CIO.putStrLn $ "AWS Log level: "    <> tshow awsLogLevel
 
+  tEarlyExit <- STM.newTVarIO False
+
   mbPlan <- loadPlan
   case mbPlan of
     Right planJson -> do
@@ -80,7 +87,6 @@ runSyncToArchive opts = do
       let scopedArchivePath = scopedArchiveUri </> compilerId
       IO.createLocalDirectoryIfMissing archivePath
       IO.createLocalDirectoryIfMissing scopedArchivePath
-      CIO.putStrLn "Extracting package list"
 
       packages     <- getPackages storePath planJson
       nonShareable <- packages & filterM (fmap not . isShareable storePath)
@@ -100,36 +106,52 @@ runSyncToArchive opts = do
         CIO.putStrLn $ "Temp path: " <> tshow tempPath
 
         IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> do
-          let archiveFileBasename = packageDir pInfo <.> ".tar.gz"
-          let archiveFile         = versionedArchiveUri </> T.pack archiveFileBasename
-          let scopedArchiveFile   = versionedArchiveUri </> T.pack storePathHash </> T.pack archiveFileBasename
-          let packageStorePath    = storePath </> packageDir pInfo
-          let packageSharePath    = packageStorePath </> "share"
-          archiveFileExists <- runResourceT $ IO.resourceExists envAws scopedArchiveFile
+          earlyExit <- STM.readTVarIO tEarlyExit
+          unless earlyExit $ do
+            let archiveFileBasename = packageDir pInfo <.> ".tar.gz"
+            let archiveFile         = versionedArchiveUri </> T.pack archiveFileBasename
+            let scopedArchiveFile   = versionedArchiveUri </> T.pack storePathHash </> T.pack archiveFileBasename
+            let packageStorePath    = storePath </> packageDir pInfo
+            let packageSharePath    = packageStorePath </> "share"
+            archiveFileExists <- runResourceT $ IO.resourceExists envAws scopedArchiveFile
 
-          unless archiveFileExists $ do
-            packageStorePathExists <- doesDirectoryExist packageStorePath
+            unless archiveFileExists $ do
+              packageStorePathExists <- doesDirectoryExist packageStorePath
 
-            when packageStorePathExists $ void $ runExceptT $ IO.exceptWarn $ do
-              let workingStorePackagePath = tempPath </> packageDir pInfo
-              liftIO $ IO.createDirectoryIfMissing True workingStorePackagePath
+              when packageStorePathExists $ void $ runExceptT $ IO.exceptWarn $ do
+                let workingStorePackagePath = tempPath </> packageDir pInfo
+                liftIO $ IO.createDirectoryIfMissing True workingStorePackagePath
 
-              let rp2 = relativePaths storePath pInfo
-              CIO.putStrLn $ "Creating " <> toText scopedArchiveFile
+                let rp2 = relativePaths storePath pInfo
+                CIO.putStrLn $ "Creating " <> toText scopedArchiveFile
 
-              let tempArchiveFile = tempPath </> archiveFileBasename
+                let tempArchiveFile = tempPath </> archiveFileBasename
 
-              metas <- createMetadata tempPath pInfo [("store-path", LC8.pack storePath)]
+                metas <- createMetadata tempPath pInfo [("store-path", LC8.pack storePath)]
 
-              IO.createTar tempArchiveFile (metas:rp2)
+                IO.createTar tempArchiveFile (metas:rp2)
 
-              liftIO (LBS.readFile tempArchiveFile >>= IO.writeResource envAws scopedArchiveFile)
+                liftIO (LBS.readFile tempArchiveFile >>= IO.writeResource envAws scopedArchiveFile)
 
-              when (canShare planData (packageId pInfo)) $
-                IO.linkOrCopyResource envAws scopedArchiveFile archiveFile
+                when (canShare planData (packageId pInfo)) $ do
+                  copyResult <- catchError (IO.linkOrCopyResource envAws scopedArchiveFile archiveFile) $ \case
+                    e@(AwsAppError (HTTP.Status 301 _)) -> do
+                      liftIO $ STM.atomically $ STM.writeTVar tEarlyExit True
+                      CIO.hPutStrLn IO.stderr $ mempty
+                        <> "ERROR: No write access to archive uris: "
+                        <> tshow (fmap toText [scopedArchiveFile, archiveFile])
+                        <> " " <> displayAppError e
 
-    Left errorMessage -> do
-      CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> T.pack errorMessage
+                    _ -> return ()
+
+                  return ()
+
+    Left (appError :: AppError) -> do
+      CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError appError
+
+  earlyExit <- STM.readTVarIO tEarlyExit
+
+  when earlyExit $ CIO.hPutStrLn IO.stderr $ "Early exit due to error"
 
   return ()
 
