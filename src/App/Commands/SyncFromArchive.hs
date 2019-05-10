@@ -60,6 +60,7 @@ import qualified HaskellWorks.CabalCache.Types                    as Z
 import qualified System.Directory                                 as IO
 import qualified System.IO                                        as IO
 import qualified System.IO.Temp                                   as IO
+import qualified System.IO.Unsafe                                 as IO
 import qualified UnliftIO.Async                                   as IO
 
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
@@ -90,7 +91,7 @@ runSyncFromArchive opts = do
   mbPlan <- loadPlan
   case mbPlan of
     Right planJson -> do
-      envAws <- mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
+      envAws <- IO.unsafeInterleaveIO $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
       let compilerId                  = planJson ^. the @"compilerId"
       let archivePath                 = versionedArchiveUri </> compilerId
       let storeCompilerPath           = storePath </> T.unpack compilerId

@@ -54,6 +54,7 @@ import qualified System.Directory                   as IO
 import qualified System.FilePath.Posix              as FP
 import qualified System.IO                          as IO
 import qualified System.IO.Temp                     as IO
+import qualified System.IO.Unsafe                   as IO
 import qualified UnliftIO.Async                     as IO
 
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
@@ -82,7 +83,7 @@ runSyncToArchive opts = do
   case mbPlan of
     Right planJson -> do
       let compilerId = planJson ^. the @"compilerId"
-      envAws <- mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
+      envAws <- IO.unsafeInterleaveIO $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
       let archivePath       = versionedArchiveUri </> compilerId
       let scopedArchivePath = scopedArchiveUri </> compilerId
       IO.createLocalDirectoryIfMissing archivePath
@@ -107,6 +108,7 @@ runSyncToArchive opts = do
 
         IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> do
           earlyExit <- STM.readTVarIO tEarlyExit
+          CIO.putStrLn $ "Stuff"
           unless earlyExit $ do
             let archiveFileBasename = packageDir pInfo <.> ".tar.gz"
             let archiveFile         = versionedArchiveUri </> T.pack archiveFileBasename
@@ -152,8 +154,6 @@ runSyncToArchive opts = do
   earlyExit <- STM.readTVarIO tEarlyExit
 
   when earlyExit $ CIO.hPutStrLn IO.stderr $ "Early exit due to error"
-
-  return ()
 
 isShareable :: MonadIO m => FilePath -> PackageInfo -> m Bool
 isShareable storePath pkg =

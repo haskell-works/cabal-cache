@@ -19,7 +19,11 @@ data AppError
   = AwsAppError
     { status :: HTTP.Status
     }
+  | HttpAppError
+    { status :: HTTP.Status
+    }
   | RetriesFailedAppError
+  | NotFound
   | GenericAppError Text
   deriving (Eq, Show, Generic)
 
