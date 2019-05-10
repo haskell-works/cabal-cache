@@ -16,7 +16,7 @@ import Data.Maybe   (fromMaybe)
 import Data.Text    (Text)
 import GHC.Generics (Generic)
 
-import qualified Data.Text       as Text
+import qualified Data.Text       as T
 import qualified System.FilePath as FP
 
 class IsPath a s | a -> s where
@@ -29,22 +29,26 @@ infixr 7 <.>
 data Location
   = S3 S3Uri
   | Local FilePath
+  | HttpUri Text
   deriving (Show, Eq, Generic)
 
 instance ToText Location where
-  toText (S3 uri)   = toText uri
-  toText (Local p)  = Text.pack p
+  toText (S3 uri)       = toText uri
+  toText (Local p)      = T.pack p
+  toText (HttpUri uri)  = uri
 
 instance IsPath Location Text where
-  (S3 b)    </> p = S3    (b </> p)
-  (Local b) </> p = Local (b </> Text.unpack p)
+  (S3      b) </> p = S3      (b </>          p)
+  (Local   b) </> p = Local   (b </> T.unpack p)
+  (HttpUri b) </> p = HttpUri (b </>          p)
 
-  (S3 b)    <.> e = S3    (b <.> e)
-  (Local b) <.> e = Local (b <.> Text.unpack e)
+  (S3      b) <.> e = S3      (b <.>          e)
+  (Local   b) <.> e = Local   (b <.> T.unpack e)
+  (HttpUri b) <.> e = HttpUri (b <.>          e)
 
 instance IsPath Text Text where
-  b </> p = Text.pack (Text.unpack b FP.</> Text.unpack p)
-  b <.> e = Text.pack (Text.unpack b FP.<.> Text.unpack e)
+  b </> p = T.pack (T.unpack b FP.</> T.unpack p)
+  b <.> e = T.pack (T.unpack b FP.<.> T.unpack e)
 
 instance (a ~ Char) => IsPath [a] [a] where
   b </> p = b FP.</> p
@@ -59,16 +63,16 @@ instance IsPath S3Uri Text where
 
 toLocation :: Text -> Maybe Location
 toLocation txt = if
-  | Text.isPrefixOf "s3://" txt'    -> either (const Nothing) (Just . S3) (fromText txt')
-  | Text.isPrefixOf "file://" txt'  -> Just (Local (Text.unpack txt'))
-  | Text.isInfixOf  "://" txt'      -> Nothing
-  | otherwise                       -> Just (Local (Text.unpack txt'))
-  where
-    txt' = Text.strip txt
+  | T.isPrefixOf "s3://" txt'    -> either (const Nothing) (Just . S3) (fromText txt')
+  | T.isPrefixOf "file://" txt'  -> Just (Local (T.unpack txt'))
+  | T.isPrefixOf "http://" txt'  -> Just (HttpUri txt')
+  | T.isInfixOf  "://" txt'      -> Nothing
+  | otherwise                       -> Just (Local (T.unpack txt'))
+  where txt' = T.strip txt
 
 -------------------------------------------------------------------------------
 stripStart :: Text -> Text -> Text
-stripStart what txt = fromMaybe txt (Text.stripPrefix what txt)
+stripStart what txt = fromMaybe txt (T.stripPrefix what txt)
 
 stripEnd :: Text -> Text -> Text
-stripEnd what txt = fromMaybe txt (Text.stripSuffix what txt)
+stripEnd what txt = fromMaybe txt (T.stripSuffix what txt)
