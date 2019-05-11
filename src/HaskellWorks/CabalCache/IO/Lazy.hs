@@ -82,12 +82,12 @@ readResource envAws = \case
   Local path      -> liftIO $ Right <$> LBS.readFile path
   HttpUri httpUri -> liftIO $ readHttpUri httpUri
 
-readFirstAvailableResource :: (MonadResource m, MonadCatch m) => AWS.Env -> [Location] -> m (Either AppError LBS.ByteString)
+readFirstAvailableResource :: (MonadResource m, MonadCatch m) => AWS.Env -> [Location] -> m (Either AppError (LBS.ByteString, Location))
 readFirstAvailableResource envAws [] = return (Left (GenericAppError "No resources specified in read"))
 readFirstAvailableResource envAws (a:as) = do
   result <- readResource envAws a
   case result of
-    Right lbs -> return $ Right lbs
+    Right lbs -> return $ Right (lbs, a)
     Left e -> if null as
       then return $ Left e
       else readFirstAvailableResource envAws as

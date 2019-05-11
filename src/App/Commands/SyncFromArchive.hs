@@ -155,34 +155,27 @@ runSyncFromArchive opts = do
                   return True
                 else if storeDirectoryExists
                   then return True
-                  else do
-                    maybeExistingArchiveFile <- IO.firstExistingResource envAws [scopedArchiveFile, archiveFile]
-                    case maybeExistingArchiveFile of
-                      Just existingArchiveFile -> do
-                        CIO.putStrLn $ "Extracting: " <> toText existingArchiveFile
+                  else runResAws envAws $ onError (cleanupStorePath packageStorePath packageId) False $ do
+                    (existingArchiveFileContents, existingArchiveFile) <- ExceptT $ IO.readFirstAvailableResource envAws [scopedArchiveFile, archiveFile]
+                    CIO.putStrLn $ "Extracting: " <> toText existingArchiveFile
 
-                        runResAws envAws $ onError (const (deleteStorePath packageStorePath)) False $ do
-                          existingArchiveFileContents <- ExceptT $ IO.readResource envAws existingArchiveFile
-                          let tempArchiveFile = tempPath </> archiveBaseName
-                          liftIO $ LBS.writeFile tempArchiveFile existingArchiveFileContents
-                          IO.extractTar tempArchiveFile storePath
+                    let tempArchiveFile = tempPath </> archiveBaseName
+                    liftIO $ LBS.writeFile tempArchiveFile existingArchiveFileContents
+                    IO.extractTar tempArchiveFile storePath
 
-                          meta <- loadMetadata packageStorePath
-                          oldStorePath <- maybeToExcept "store-path is missing from Metadata" (Map.lookup "store-path" meta)
+                    meta <- loadMetadata packageStorePath
+                    oldStorePath <- maybeToExcept "store-path is missing from Metadata" (Map.lookup "store-path" meta)
 
-                          case confPath pInfo of
-                            Tagged conf _ -> do
-                              let theConfPath = storePath </> conf
-                              let tempConfPath = tempPath </> conf
-                              confPathExists <- liftIO $ IO.doesFileExist theConfPath
-                              when confPathExists $ do
-                                confContents <- liftIO $ LBS.readFile theConfPath
-                                liftIO $ LBS.writeFile tempConfPath (replace (LBS.toStrict oldStorePath) (C8.pack storePath) confContents)
-                                liftIO $ IO.renamePath tempConfPath theConfPath
-                              return True
-                      Nothing -> do
-                        CIO.hPutStrLn IO.stderr $ "Warning: Sync failure: " <> packageId
-                        return False
+                    case confPath pInfo of
+                      Tagged conf _ -> do
+                        let theConfPath = storePath </> conf
+                        let tempConfPath = tempPath </> conf
+                        confPathExists <- liftIO $ IO.doesFileExist theConfPath
+                        when confPathExists $ do
+                          confContents <- liftIO $ LBS.readFile theConfPath
+                          liftIO $ LBS.writeFile tempConfPath (replace (LBS.toStrict oldStorePath) (C8.pack storePath) confContents)
+                          liftIO $ IO.renamePath tempConfPath theConfPath
+                        return True
           Nothing -> do
             CIO.hPutStrLn IO.stderr $ "Warning: Invalid package id: " <> packageId
             return True
@@ -200,6 +193,11 @@ runSyncFromArchive opts = do
       CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError appError
 
   return ()
+
+cleanupStorePath :: MonadIO m => FilePath -> Z.PackageId -> AppError -> m ()
+cleanupStorePath packageStorePath packageId e = do
+  CIO.hPutStrLn IO.stderr $ "Warning: Sync failure: " <> packageId
+  deleteStorePath packageStorePath
 
 deleteStorePath :: MonadIO m => FilePath -> m ()
 deleteStorePath pkgStorePath = liftIO (IO.removeDirectoryRecursive pkgStorePath)
