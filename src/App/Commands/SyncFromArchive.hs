@@ -164,8 +164,8 @@ runSyncFromArchive opts = do
                           maybeArchiveFileContents <- IO.readResource envAws existingArchiveFile
 
                           case maybeArchiveFileContents of
-                            Just archiveFileContents -> do
-                              existingArchiveFileContents <- IO.readResource envAws existingArchiveFile & maybeToExceptM (GenericAppError ("Archive unavailable: " <> toText archiveFile))
+                            Right archiveFileContents -> do
+                              existingArchiveFileContents <- ExceptT $ IO.readResource envAws existingArchiveFile
                               let tempArchiveFile = tempPath </> archiveBaseName
                               liftIO $ LBS.writeFile tempArchiveFile existingArchiveFileContents
                               IO.extractTar tempArchiveFile storePath
@@ -183,8 +183,8 @@ runSyncFromArchive opts = do
                                     liftIO $ LBS.writeFile tempConfPath (replace (LBS.toStrict oldStorePath) (C8.pack storePath) confContents)
                                     liftIO $ IO.renamePath tempConfPath theConfPath
                                   return True
-                            Nothing -> do
-                              CIO.putStrLn $ "Archive unavailable: " <> toText existingArchiveFile
+                            Left appError -> do
+                              CIO.putStrLn $ "Archive unavailable: " <> toText existingArchiveFile <> ", due to: " <> displayAppError appError
                               deleteMetadata packageStorePath
                               return False
                       Nothing -> do
