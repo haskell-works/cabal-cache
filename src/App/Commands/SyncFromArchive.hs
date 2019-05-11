@@ -160,33 +160,26 @@ runSyncFromArchive opts = do
                     case maybeExistingArchiveFile of
                       Just existingArchiveFile -> do
                         CIO.putStrLn $ "Extracting: " <> toText existingArchiveFile
-                        runResAws envAws $ onErrorClean packageStorePath False $ do
-                          maybeArchiveFileContents <- IO.readResource envAws existingArchiveFile
 
-                          case maybeArchiveFileContents of
-                            Right archiveFileContents -> do
-                              existingArchiveFileContents <- ExceptT $ IO.readResource envAws existingArchiveFile
-                              let tempArchiveFile = tempPath </> archiveBaseName
-                              liftIO $ LBS.writeFile tempArchiveFile existingArchiveFileContents
-                              IO.extractTar tempArchiveFile storePath
+                        runResAws envAws $ onError (const (deleteStorePath packageStorePath)) False $ do
+                          existingArchiveFileContents <- ExceptT $ IO.readResource envAws existingArchiveFile
+                          let tempArchiveFile = tempPath </> archiveBaseName
+                          liftIO $ LBS.writeFile tempArchiveFile existingArchiveFileContents
+                          IO.extractTar tempArchiveFile storePath
 
-                              meta <- loadMetadata packageStorePath
-                              oldStorePath <- maybeToExcept "store-path is missing from Metadata" (Map.lookup "store-path" meta)
+                          meta <- loadMetadata packageStorePath
+                          oldStorePath <- maybeToExcept "store-path is missing from Metadata" (Map.lookup "store-path" meta)
 
-                              case confPath pInfo of
-                                Tagged conf _ -> do
-                                  let theConfPath = storePath </> conf
-                                  let tempConfPath = tempPath </> conf
-                                  confPathExists <- liftIO $ IO.doesFileExist theConfPath
-                                  when confPathExists $ do
-                                    confContents <- liftIO $ LBS.readFile theConfPath
-                                    liftIO $ LBS.writeFile tempConfPath (replace (LBS.toStrict oldStorePath) (C8.pack storePath) confContents)
-                                    liftIO $ IO.renamePath tempConfPath theConfPath
-                                  return True
-                            Left appError -> do
-                              CIO.putStrLn $ "Archive unavailable: " <> toText existingArchiveFile <> ", due to: " <> displayAppError appError
-                              deleteMetadata packageStorePath
-                              return False
+                          case confPath pInfo of
+                            Tagged conf _ -> do
+                              let theConfPath = storePath </> conf
+                              let tempConfPath = tempPath </> conf
+                              confPathExists <- liftIO $ IO.doesFileExist theConfPath
+                              when confPathExists $ do
+                                confContents <- liftIO $ LBS.readFile theConfPath
+                                liftIO $ LBS.writeFile tempConfPath (replace (LBS.toStrict oldStorePath) (C8.pack storePath) confContents)
+                                liftIO $ IO.renamePath tempConfPath theConfPath
+                              return True
                       Nothing -> do
                         CIO.hPutStrLn IO.stderr $ "Warning: Sync failure: " <> packageId
                         return False
@@ -208,13 +201,16 @@ runSyncFromArchive opts = do
 
   return ()
 
-onErrorClean :: MonadIO m => FilePath -> a -> ExceptT AppError m a -> m a
-onErrorClean pkgStorePath failureValue f = do
+deleteStorePath :: MonadIO m => FilePath -> m ()
+deleteStorePath pkgStorePath = liftIO (IO.removeDirectoryRecursive pkgStorePath)
+
+onError :: MonadIO m => (AppError -> m ()) -> a -> ExceptT AppError m a -> m a
+onError h failureValue f = do
   result <- runExceptT $ catchError (exceptWarn f) handler
   case result of
     Left a  -> return failureValue
     Right a -> return a
-  where handler e = liftIO (IO.removeDirectoryRecursive pkgStorePath) >> return failureValue
+  where handler e = lift (h e) >> return failureValue
 
 cmdSyncFromArchive :: Mod CommandFields (IO ())
 cmdSyncFromArchive = command "sync-from-archive"  $ flip info idm $ runSyncFromArchive <$> optsSyncFromArchive
