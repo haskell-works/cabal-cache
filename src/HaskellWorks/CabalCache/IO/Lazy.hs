@@ -72,11 +72,14 @@ handleHttpError f = catch (Right <$> f) $ \(e :: HTTP.HttpException) ->
       _                               -> return (Left (GenericAppError (tshow e)))
     _                                 -> throwM e
 
-readResource :: MonadResource m => AWS.Env -> Location -> m (Maybe LBS.ByteString)
+getS3Uri :: (MonadResource m, MonadCatch m) => AWS.Env -> AWS.S3Uri -> m (Either AppError LBS.ByteString)
+getS3Uri envAws (AWS.S3Uri b k) = handleAwsError $ runAws envAws $ AWS.unsafeDownload b k
+
+readResource :: (MonadResource m, MonadCatch m) => AWS.Env -> Location -> m (Either AppError LBS.ByteString)
 readResource envAws = \case
-  S3 s3Uri        -> runAws envAws $ AWS.downloadFromS3Uri s3Uri
-  Local path      -> liftIO $ Just          <$> LBS.readFile path
-  HttpUri httpUri -> liftIO $ rightToMaybe  <$> readHttpUri httpUri
+  S3 s3Uri        -> getS3Uri envAws s3Uri
+  Local path      -> liftIO $ Right <$> LBS.readFile path
+  HttpUri httpUri -> liftIO $ readHttpUri httpUri
 
 safePathIsSymbolLink :: FilePath -> IO Bool
 safePathIsSymbolLink filePath = catch (IO.pathIsSymbolicLink filePath) handler
