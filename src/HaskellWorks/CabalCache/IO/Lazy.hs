@@ -11,6 +11,7 @@ module HaskellWorks.CabalCache.IO.Lazy
   , createLocalDirectoryIfMissing
   , linkOrCopyResource
   , readHttpUri
+  , removePathRecursive
   ) where
 
 import Antiope.Core
@@ -205,3 +206,12 @@ headHttpUri httpUri = handleHttpError $ do
   response <- liftIO $ HTTP.httpLbs request manager
 
   return $ HTTP.responseBody response
+
+removePathRecursive :: (MonadIO m, MonadCatch m) => FilePath -> m (Either AppError ())
+removePathRecursive pkgStorePath = catch action handler
+  where action :: MonadIO m => m (Either AppError ())
+        action = Right <$> liftIO (IO.removeDirectoryRecursive pkgStorePath)
+        handler :: MonadIO m => IOError -> m (Either AppError ())
+        handler e = do
+          CIO.hPutStrLn IO.stderr $ "Warning: Caught " <> tshow e
+          return (Left (GenericAppError (tshow e)))
