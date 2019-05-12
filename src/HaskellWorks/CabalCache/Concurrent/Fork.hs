@@ -8,7 +8,7 @@ import qualified Control.Concurrent.STM as STM
 forkThreadsWait :: Int -> IO () -> IO ()
 forkThreadsWait n f = do
   tDone <- STM.atomically $ STM.newTVar (0 :: Int)
-  threads <- forM [1 .. n] $ \_ -> IO.forkIO $ do
+  forM_ [1 .. n] $ \_ -> IO.forkIO $ do
     f
     STM.atomically $ STM.modifyTVar tDone (+1)
 

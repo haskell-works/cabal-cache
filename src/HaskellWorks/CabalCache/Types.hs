@@ -7,9 +7,9 @@
 module HaskellWorks.CabalCache.Types where
 
 import Data.Aeson
-import Data.Maybe   (fromMaybe)
 import Data.Text    (Text)
 import GHC.Generics
+import Prelude      hiding (id)
 
 type CompilerId = Text
 type PackageId  = Text

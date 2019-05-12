@@ -8,26 +8,22 @@ module App.Commands.Version
   ) where
 
 import App.Commands.Options.Parser (optsVersion)
-import App.Static                  (homeDirectory)
-import Control.Lens                hiding ((<.>))
-import Control.Monad               (unless, when)
-import Data.Generics.Product.Any   (the)
 import Data.List
 import Data.Semigroup              ((<>))
 import Options.Applicative         hiding (columns)
-import Paths_cabal_cache
 
 import qualified App.Commands.Options.Types         as Z
 import qualified Data.Text                          as T
 import qualified Data.Version                       as V
 import qualified HaskellWorks.CabalCache.IO.Console as CIO
+import qualified Paths_cabal_cache                  as P
 
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
 {-# ANN module ("HLint: ignore Redundant do"        :: String) #-}
 
 runVersion :: Z.VersionOptions -> IO ()
 runVersion _ = do
-  let V.Version {..} = Paths_cabal_cache.version
+  let V.Version {..} = P.version
 
   let version = intercalate "." $ fmap show versionBranch
 

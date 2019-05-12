@@ -4,13 +4,11 @@ module HaskellWorks.CabalCache.Data.RelationSpec
   ( spec
   ) where
 
-import HaskellWorks.CabalCache.Data.Relation (Relation (Relation))
 import HaskellWorks.Hspec.Hedgehog
 import Hedgehog
 import Test.Hspec
 
 import qualified Data.List                             as L
-import qualified Data.Map                              as M
 import qualified Data.Set                              as S
 import qualified HaskellWorks.CabalCache.Data.Relation as R
 import qualified Hedgehog.Gen                          as G

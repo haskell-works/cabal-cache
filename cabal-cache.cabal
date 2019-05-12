@@ -60,6 +60,7 @@ common zlib                           { build-depends: zlib                     
 
 common config
   default-language:     Haskell2010
+  ghc-options:          -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates
 
 library
   import:   base, config

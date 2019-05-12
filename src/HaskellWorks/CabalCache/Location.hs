@@ -11,7 +11,7 @@ module HaskellWorks.CabalCache.Location
 where
 
 import Antiope.Core (ToText (..), fromText)
-import Antiope.S3   (BucketName, ObjectKey (..), S3Uri (..))
+import Antiope.S3   (ObjectKey (..), S3Uri (..))
 import Data.Maybe   (fromMaybe)
 import Data.Text    (Text)
 import GHC.Generics (Generic)

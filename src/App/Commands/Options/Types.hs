@@ -4,11 +4,8 @@
 module App.Commands.Options.Types where
 
 import Antiope.Env                      (Region)
-import Data.Text                        (Text)
 import GHC.Generics
-import GHC.Word                         (Word8)
 import HaskellWorks.CabalCache.Location
-import Network.AWS.Types                (Region)
 
 import qualified Antiope.Env as AWS
 
