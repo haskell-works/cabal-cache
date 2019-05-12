@@ -12,8 +12,10 @@ workflows:
           name: GHC 8.6.5
           executor: haskell/ghc-8_6_5
           context: haskell-ci
+          binary-cache-uri: ${BINARY_CACHE_URI-"http://hw-binary-cache-us-west-2-a.s3-website-us-west-2.amazonaws.com/archive"}
           workspace-dir: workspace/ghc-8.6.5
           write-result-workspace: true
+          cabal-cache-tag: v1.0.0.6
 
       - github/release-cabal:
           context: haskell-ci

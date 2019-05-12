@@ -14,6 +14,7 @@ import App.Commands.Options.Parser      (optsSyncFromArchive)
 import App.Static                       (homeDirectory)
 import Control.Lens                     hiding ((<.>))
 import Control.Monad                    (unless, void, when)
+import Control.Monad.Catch              (MonadCatch)
 import Control.Monad.Except
 import Control.Monad.IO.Class           (liftIO)
 import Control.Monad.Trans.Resource     (runResourceT)
@@ -194,13 +195,10 @@ runSyncFromArchive opts = do
 
   return ()
 
-cleanupStorePath :: MonadIO m => FilePath -> Z.PackageId -> AppError -> m ()
+cleanupStorePath :: (MonadIO m, MonadCatch m) => FilePath -> Z.PackageId -> AppError -> m ()
 cleanupStorePath packageStorePath packageId e = do
   CIO.hPutStrLn IO.stderr $ "Warning: Sync failure: " <> packageId
-  deleteStorePath packageStorePath
-
-deleteStorePath :: MonadIO m => FilePath -> m ()
-deleteStorePath pkgStorePath = liftIO (IO.removeDirectoryRecursive pkgStorePath)
+  void $ IO.removePathRecursive packageStorePath
 
 onError :: MonadIO m => (AppError -> m ()) -> a -> ExceptT AppError m a -> m a
 onError h failureValue f = do
