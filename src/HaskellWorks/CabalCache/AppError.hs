@@ -32,7 +32,9 @@ instance IsString AppError where
 
 displayAppError :: AppError -> Text
 displayAppError (AwsAppError status)  = tshow status
+displayAppError (HttpAppError status) = tshow status
 displayAppError RetriesFailedAppError = "Multiple retries failed"
+displayAppError NotFound              = "Not found"
 displayAppError (GenericAppError msg) = msg
 
 appErrorStatus :: AppError -> Maybe Int
