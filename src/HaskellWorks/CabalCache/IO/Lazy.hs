@@ -68,7 +68,11 @@ getS3Uri envAws (AWS.S3Uri b k) = handleAwsError $ runAws envAws $ AWS.unsafeDow
 readResource :: (MonadResource m, MonadCatch m) => AWS.Env -> Location -> m (Either AppError LBS.ByteString)
 readResource envAws = \case
   S3 s3Uri        -> getS3Uri envAws s3Uri
-  Local path      -> liftIO $ Right <$> LBS.readFile path
+  Local path      -> liftIO $ do
+    fileExists <- IO.doesFileExist path
+    if fileExists
+      then Right <$> LBS.readFile path
+      else pure (Left NotFound)
   HttpUri httpUri -> liftIO $ readHttpUri httpUri
 
 readFirstAvailableResource :: (MonadResource m, MonadCatch m) => AWS.Env -> [Location] -> m (Either AppError (LBS.ByteString, Location))
@@ -121,8 +125,8 @@ uploadToS3 envAws (AWS.S3Uri b k) lbs = do
   let po  = AWS.putObject b k req
   handleAwsError $ void $ runResAws envAws $ AWS.send po
 
-writeResource :: (MonadUnliftIO m, MonadCatch m) => AWS.Env -> Location -> LBS.ByteString -> m (Either AppError ())
-writeResource envAws loc lbs = case loc of
+writeResource :: (MonadUnliftIO m, MonadCatch m) => AWS.Env -> Location -> LBS.ByteString -> ExceptT AppError m ()
+writeResource envAws loc lbs = ExceptT $ case loc of
   S3 s3Uri   -> uploadToS3 envAws s3Uri lbs
   Local path -> liftIO (LBS.writeFile path lbs) >> return (Right ())
   HttpUri _  -> return (Left (GenericAppError "HTTP PUT method not supported"))

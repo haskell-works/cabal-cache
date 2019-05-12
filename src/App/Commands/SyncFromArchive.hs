@@ -112,12 +112,6 @@ runSyncFromArchive opts = do
 
       let pInfos = M.fromList $ fmap (\p -> (p ^. the @"packageId", p)) packages
 
-      -- forM_ planDeps $ \(a, b) -> do
-      --   let maybeName = M.lookup a planPackages <&> (^. the @"name")
-      --   case maybeName of
-      --     Just name -> CIO.putStrLn $ name <> " " <> a <> " -> " <> b
-      --     Nothing   -> CIO.putStrLn $ "*********" <> a <> " -> " <> b
-
       IO.withSystemTempDirectory "cabal-cache" $ \tempPath -> do
         IO.createDirectoryIfMissing True (tempPath </> T.unpack compilerId </> "package.db")
 
@@ -141,7 +135,7 @@ runSyncFromArchive opts = do
                 else if storeDirectoryExists
                   then return True
                   else runResAws envAws $ onError (cleanupStorePath packageStorePath packageId) False $ do
-                    (existingArchiveFileContents, existingArchiveFile) <- ExceptT $ IO.readFirstAvailableResource envAws [scopedArchiveFile, archiveFile]
+                    (existingArchiveFileContents, existingArchiveFile) <- ExceptT $ IO.readFirstAvailableResource envAws [archiveFile, scopedArchiveFile]
                     CIO.putStrLn $ "Extracting: " <> toText existingArchiveFile
 
                     let tempArchiveFile = tempPath </> archiveBaseName
@@ -180,7 +174,8 @@ runSyncFromArchive opts = do
 cleanupStorePath :: (MonadIO m, MonadCatch m) => FilePath -> Z.PackageId -> AppError -> m ()
 cleanupStorePath packageStorePath packageId e = do
   CIO.hPutStrLn IO.stderr $ "Warning: Sync failure: " <> packageId <> ", reason: " <> displayAppError e
-  void $ IO.removePathRecursive packageStorePath
+  pathExists <- liftIO $ IO.doesPathExist packageStorePath
+  when pathExists $ void $ IO.removePathRecursive packageStorePath
 
 onError :: MonadIO m => (AppError -> m ()) -> a -> ExceptT AppError m a -> m a
 onError h failureValue f = do
