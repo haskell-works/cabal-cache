@@ -7,8 +7,6 @@ module HaskellWorks.CabalCache.QuerySpec
   ( spec
   ) where
 
-import Control.Lens
-import Data.Generics.Product.Any
 import HaskellWorks.Hspec.Hedgehog
 import Hedgehog
 import Test.Hspec
@@ -25,26 +23,28 @@ import qualified HaskellWorks.CabalCache.Types as Z
 spec :: Spec
 spec = describe "HaskellWorks.Assist.QuerySpec" $ do
   it "stub" $ requireTest $ do
-    let Right planJson = A.eitherDecode exampleJson
-    planJson === Z.PlanJson
-      { Z.compilerId  = "ghc-8.6.4"
-      , Z.installPlan =
-        [ Z.Package
-          { Z.packageType   = "pre-existing"
-          , Z.id            = "Cabal-2.4.0.1"
-          , Z.name          = "Cabal"
-          , Z.version       = "2.4.0.1"
-          , Z.style         = Nothing
-          , Z.componentName = Nothing
-          , Z.components    = Nothing
-          , Z.depends       =
-            [ "array-0.5.3.0"
-            , "base-4.12.0.0"
+    case A.eitherDecode exampleJson of
+      Right planJson -> do
+        planJson === Z.PlanJson
+          { Z.compilerId  = "ghc-8.6.4"
+          , Z.installPlan =
+            [ Z.Package
+              { Z.packageType   = "pre-existing"
+              , Z.id            = "Cabal-2.4.0.1"
+              , Z.name          = "Cabal"
+              , Z.version       = "2.4.0.1"
+              , Z.style         = Nothing
+              , Z.componentName = Nothing
+              , Z.components    = Nothing
+              , Z.depends       =
+                [ "array-0.5.3.0"
+                , "base-4.12.0.0"
+                ]
+              , Z.exeDepends    = []
+              }
             ]
-          , Z.exeDepends    = []
           }
-        ]
-      }
+      Left msg -> fail msg
 
 exampleJson :: LBS.ByteString
 exampleJson = [r|

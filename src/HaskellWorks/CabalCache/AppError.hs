@@ -31,8 +31,8 @@ instance IsString AppError where
   fromString = GenericAppError . T.pack
 
 displayAppError :: AppError -> Text
-displayAppError (AwsAppError status)  = tshow status
-displayAppError (HttpAppError status) = tshow status
+displayAppError (AwsAppError s)       = tshow s
+displayAppError (HttpAppError s)      = tshow s
 displayAppError RetriesFailedAppError = "Multiple retries failed"
 displayAppError NotFound              = "Not found"
 displayAppError (GenericAppError msg) = msg

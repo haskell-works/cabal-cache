@@ -10,18 +10,16 @@ module HaskellWorks.CabalCache.Topology
   ) where
 
 import Control.Arrow                 ((&&&))
-import Control.Lens                  (each, set, view, (&), (.~), (<&>), (^.), (^..))
+import Control.Lens                  (view, (&), (<&>), (^.))
 import Control.Monad                 (join)
 import Data.Either                   (fromRight)
 import Data.Generics.Product.Any     (the)
 import Data.Map.Strict               (Map)
-import Data.Maybe                    (fromMaybe, mapMaybe)
+import Data.Maybe                    (fromMaybe)
 import Data.Set                      (Set)
-import Data.Text                     (Text)
 import GHC.Generics                  (Generic)
 import HaskellWorks.CabalCache.Types (Package, PackageId, PlanJson)
 
-import qualified Data.List       as L
 import qualified Data.Map.Strict as M
 import qualified Data.Set        as S
 import qualified Topograph       as TG
@@ -56,7 +54,5 @@ buildPlanData' plan knownNonShareable =
       let tg        = TG.transpose g
           nsPaths   = concatMap (fromMaybe [] . paths tg) knownNonShareable
           nsAll     = S.fromList (join nsPaths)
-          dMap      = TG.adjacencyMap (TG.reduction g)
-          rdMap     = TG.adjacencyMap (TG.reduction tg)
       in PlanData { nonShareable = nsAll }
   where paths g x = (fmap . fmap . fmap) (TG.gFromVertex g) $ TG.dfs g <$> TG.gToVertex g x

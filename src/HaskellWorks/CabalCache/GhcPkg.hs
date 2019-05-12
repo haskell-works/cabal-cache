@@ -1,10 +1,8 @@
 module HaskellWorks.CabalCache.GhcPkg where
 
-import Data.Text      (Text)
 import System.Exit    (ExitCode (..), exitWith)
 import System.Process (spawnProcess, waitForProcess)
 
-import qualified Data.Text as Text
 import qualified System.IO as IO
 
 runGhcPkg :: [String] -> IO ()

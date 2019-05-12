@@ -10,8 +10,7 @@ import Control.Applicative
 import HaskellWorks.CabalCache.Location (Location (..), toLocation, (</>))
 import Options.Applicative
 
-import qualified Data.Text         as Text
-import qualified Network.AWS.Types as AWS
+import qualified Data.Text as Text
 
 optsSyncFromArchive :: Parser SyncFromArchiveOptions
 optsSyncFromArchive = SyncFromArchiveOptions

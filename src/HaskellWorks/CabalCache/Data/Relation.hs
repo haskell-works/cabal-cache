@@ -15,7 +15,6 @@ module HaskellWorks.CabalCache.Data.Relation
   , withoutRange
   ) where
 
-import GHC.Generics
 import HaskellWorks.CabalCache.Data.Relation.Type (Relation (Relation))
 import Prelude                                    hiding (null)
 

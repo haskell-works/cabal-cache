@@ -9,49 +9,37 @@ module App.Commands.SyncFromArchive
   ) where
 
 import Antiope.Core                     (runResAws, toText)
-import Antiope.Env                      (LogLevel, mkEnv)
+import Antiope.Env                      (mkEnv)
 import App.Commands.Options.Parser      (optsSyncFromArchive)
-import App.Static                       (homeDirectory)
 import Control.Lens                     hiding ((<.>))
 import Control.Monad                    (unless, void, when)
 import Control.Monad.Catch              (MonadCatch)
 import Control.Monad.Except
 import Control.Monad.IO.Class           (liftIO)
-import Control.Monad.Trans.Resource     (runResourceT)
 import Data.ByteString.Lazy.Search      (replace)
 import Data.Generics.Product.Any        (the)
-import Data.List                        (nub, sort)
 import Data.Maybe
 import Data.Semigroup                   ((<>))
-import Data.Text                        (Text)
 import HaskellWorks.CabalCache.AppError
-import HaskellWorks.CabalCache.Core     (PackageInfo (..), Presence (..), Tagged (..), getPackages, loadPlan)
-import HaskellWorks.CabalCache.IO.Error (exceptWarn, maybeToExcept, maybeToExceptM)
+import HaskellWorks.CabalCache.IO.Error (exceptWarn, maybeToExcept)
 import HaskellWorks.CabalCache.Location ((<.>), (</>))
-import HaskellWorks.CabalCache.Metadata (deleteMetadata, loadMetadata)
+import HaskellWorks.CabalCache.Metadata (loadMetadata)
 import HaskellWorks.CabalCache.Show
-import HaskellWorks.CabalCache.Topology (buildPlanData)
 import HaskellWorks.CabalCache.Version  (archiveVersion)
-import Network.AWS.Types                (Region (Oregon))
 import Options.Applicative              hiding (columns)
 import System.Directory                 (createDirectoryIfMissing, doesDirectoryExist)
 
 import qualified App.Commands.Options.Types                       as Z
-import qualified Codec.Archive.Tar                                as F
-import qualified Codec.Compression.GZip                           as F
-import qualified Control.Concurrent                               as IO
 import qualified Control.Concurrent.STM                           as STM
-import qualified Data.ByteString                                  as BS
 import qualified Data.ByteString.Char8                            as C8
 import qualified Data.ByteString.Lazy                             as LBS
 import qualified Data.Map                                         as M
 import qualified Data.Map.Strict                                  as Map
-import qualified Data.Set                                         as S
 import qualified Data.Text                                        as T
 import qualified HaskellWorks.CabalCache.AWS.Env                  as AWS
 import qualified HaskellWorks.CabalCache.Concurrent.DownloadQueue as DQ
 import qualified HaskellWorks.CabalCache.Concurrent.Fork          as IO
-import qualified HaskellWorks.CabalCache.Data.Relation            as R
+import qualified HaskellWorks.CabalCache.Core                     as Z
 import qualified HaskellWorks.CabalCache.GhcPkg                   as GhcPkg
 import qualified HaskellWorks.CabalCache.Hash                     as H
 import qualified HaskellWorks.CabalCache.IO.Console               as CIO
@@ -62,7 +50,6 @@ import qualified System.Directory                                 as IO
 import qualified System.IO                                        as IO
 import qualified System.IO.Temp                                   as IO
 import qualified System.IO.Unsafe                                 as IO
-import qualified UnliftIO.Async                                   as IO
 
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
 {-# ANN module ("HLint: ignore Redundant do"        :: String) #-}
@@ -89,12 +76,11 @@ runSyncFromArchive opts = do
 
   GhcPkg.testAvailability
 
-  mbPlan <- loadPlan
+  mbPlan <- Z.loadPlan
   case mbPlan of
     Right planJson -> do
       envAws <- IO.unsafeInterleaveIO $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
       let compilerId                  = planJson ^. the @"compilerId"
-      let archivePath                 = versionedArchiveUri </> compilerId
       let storeCompilerPath           = storePath </> T.unpack compilerId
       let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"
       let storeCompilerLibPath        = storeCompilerPath </> "lib"
@@ -110,12 +96,10 @@ runSyncFromArchive opts = do
         CIO.putStrLn "Package DB missing. Creating Package DB"
         GhcPkg.init storeCompilerPackageDbPath
 
-      packages <- getPackages storePath planJson
+      packages <- Z.getPackages storePath planJson
 
       let installPlan = planJson ^. the @"installPlan"
       let planPackages = M.fromList $ fmap (\p -> (p ^. the @"id", p)) installPlan
-
-      let planData = buildPlanData planJson (packages ^.. each . the @"packageId")
 
       let planDeps0 = installPlan >>= \p -> fmap (p ^. the @"id", ) $ mempty
             <> (p ^. the @"depends")
@@ -139,10 +123,10 @@ runSyncFromArchive opts = do
 
         IO.forkThreadsWait threads $ DQ.runQueue downloadQueue $ \packageId -> case M.lookup packageId pInfos of
           Just pInfo -> do
-            let archiveBaseName   = packageDir pInfo <.> ".tar.gz"
+            let archiveBaseName   = Z.packageDir pInfo <.> ".tar.gz"
             let archiveFile       = versionedArchiveUri </> T.pack archiveBaseName
             let scopedArchiveFile = scopedArchiveUri </> T.pack archiveBaseName
-            let packageStorePath  = storePath </> packageDir pInfo
+            let packageStorePath  = storePath </> Z.packageDir pInfo
             storeDirectoryExists <- doesDirectoryExist packageStorePath
             let maybePackage = M.lookup packageId planPackages
 
@@ -167,8 +151,8 @@ runSyncFromArchive opts = do
                     meta <- loadMetadata packageStorePath
                     oldStorePath <- maybeToExcept "store-path is missing from Metadata" (Map.lookup "store-path" meta)
 
-                    case confPath pInfo of
-                      Tagged conf _ -> do
+                    case Z.confPath pInfo of
+                      Z.Tagged conf _ -> do
                         let theConfPath = storePath </> conf
                         let tempConfPath = tempPath </> conf
                         confPathExists <- liftIO $ IO.doesFileExist theConfPath
@@ -180,8 +164,6 @@ runSyncFromArchive opts = do
           Nothing -> do
             CIO.hPutStrLn IO.stderr $ "Warning: Invalid package id: " <> packageId
             return True
-
-      dependenciesRemaining <- STM.atomically $ STM.readTVar (downloadQueue ^. the @"tDependencies")
 
       CIO.putStrLn "Recaching package database"
       GhcPkg.recache storeCompilerPackageDbPath
@@ -197,14 +179,14 @@ runSyncFromArchive opts = do
 
 cleanupStorePath :: (MonadIO m, MonadCatch m) => FilePath -> Z.PackageId -> AppError -> m ()
 cleanupStorePath packageStorePath packageId e = do
-  CIO.hPutStrLn IO.stderr $ "Warning: Sync failure: " <> packageId
+  CIO.hPutStrLn IO.stderr $ "Warning: Sync failure: " <> packageId <> ", reason: " <> displayAppError e
   void $ IO.removePathRecursive packageStorePath
 
 onError :: MonadIO m => (AppError -> m ()) -> a -> ExceptT AppError m a -> m a
 onError h failureValue f = do
   result <- runExceptT $ catchError (exceptWarn f) handler
   case result of
-    Left a  -> return failureValue
+    Left _  -> return failureValue
     Right a -> return a
   where handler e = lift (h e) >> return failureValue
 

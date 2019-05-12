@@ -6,7 +6,6 @@ module HaskellWorks.CabalCache.LocationSpec
 
 import Antiope.Core                     (toText)
 import Antiope.S3                       (BucketName (..), ObjectKey (..), S3Uri (..))
-import Data.Text                        (Text)
 import HaskellWorks.CabalCache.Location
 
 import HaskellWorks.Hspec.Hedgehog
@@ -37,10 +36,6 @@ localPath = do
   parts <- Gen.list (Range.linear 1 5) partGen
   ext <- Gen.string (Range.linear 2 4) Gen.alphaNum
   pure $ "/" <> List.intercalate "/" parts <> "." <> ext
-
-location :: MonadGen m => m Location
-location =
-  Gen.choice [S3 <$> s3Uri, Local <$> localPath]
 
 spec :: Spec
 spec = describe "HaskellWorks.Assist.LocationSpec" $ do

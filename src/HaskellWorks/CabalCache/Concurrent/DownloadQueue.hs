@@ -8,19 +8,14 @@ module HaskellWorks.CabalCache.Concurrent.DownloadQueue
   , runQueue
   ) where
 
-import Control.Lens
-import Control.Monad
 import Control.Monad.IO.Class
-import Data.Generics.Product.Any
-import Data.Set                  ((\\))
+import Data.Set               ((\\))
 
 import qualified Control.Concurrent.STM                  as STM
 import qualified Data.Map                                as M
 import qualified Data.Set                                as S
-import qualified Data.Text                               as T
 import qualified HaskellWorks.CabalCache.Concurrent.Type as Z
 import qualified HaskellWorks.CabalCache.Data.Relation   as R
-import qualified HaskellWorks.CabalCache.IO.Console      as CIO
 
 anchor :: Z.PackageId -> M.Map Z.ConsumerId Z.ProviderId -> M.Map Z.ConsumerId Z.ProviderId
 anchor root dependencies = M.union dependencies $ M.singleton root (mconcat (M.elems dependencies))

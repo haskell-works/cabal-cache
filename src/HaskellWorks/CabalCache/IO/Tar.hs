@@ -15,16 +15,12 @@ import Control.Lens
 import Control.Monad.Except
 import Control.Monad.IO.Class           (MonadIO, liftIO)
 import Data.Generics.Product.Any
-import Data.List
 import GHC.Generics
 import HaskellWorks.CabalCache.AppError
 import HaskellWorks.CabalCache.Show
 
-import qualified Data.Text                          as T
-import qualified HaskellWorks.CabalCache.IO.Console as CIO
-import qualified System.Exit                        as IO
-import qualified System.IO                          as IO
-import qualified System.Process                     as IO
+import qualified System.Exit    as IO
+import qualified System.Process as IO
 
 data TarGroup = TarGroup
   { basePath   :: FilePath
@@ -38,7 +34,7 @@ createTar tarFile groups = do
   exitCode <- liftIO $ IO.waitForProcess process
   case exitCode of
     IO.ExitSuccess   -> return ()
-    IO.ExitFailure n -> throwError "Failed to create tar"
+    IO.ExitFailure n -> throwError $ GenericAppError $ "Failed to create tar. Exit code: " <> tshow n
 
 extractTar :: MonadIO m => FilePath -> FilePath -> ExceptT AppError m ()
 extractTar tarFile targetPath = do
@@ -46,7 +42,7 @@ extractTar tarFile targetPath = do
   exitCode <- liftIO $ IO.waitForProcess process
   case exitCode of
     IO.ExitSuccess   -> return ()
-    IO.ExitFailure n -> throwError "Failed to extract tar"
+    IO.ExitFailure n -> throwError $ GenericAppError $ "Failed to extract tar.  Exit code: " <> tshow n
 
 tarGroupToArgs :: TarGroup -> [String]
 tarGroupToArgs tarGroup = ["-C", tarGroup ^. the @"basePath"] <> tarGroup ^. the @"entryPaths"

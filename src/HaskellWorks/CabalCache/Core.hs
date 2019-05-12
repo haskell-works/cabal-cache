@@ -21,7 +21,6 @@ import Data.Aeson                       (eitherDecode)
 import Data.Bifunctor                   (first)
 import Data.Bool                        (bool)
 import Data.Generics.Product.Any        (the)
-import Data.Maybe                       (maybeToList)
 import Data.Semigroup                   ((<>))
 import Data.String
 import Data.Text                        (Text)
@@ -65,13 +64,11 @@ relativePaths basePath pInfo =
   ]
 
 getPackages :: FilePath -> Z.PlanJson -> IO [PackageInfo]
-getPackages basePath planJson = forM packages (mkPackageInfo basePath compilerId)
-  where compilerId :: Text
-        compilerId = planJson ^. the @"compilerId"
+getPackages basePath planJson = forM packages (mkPackageInfo basePath compilerId')
+  where compilerId' :: Text
+        compilerId' = planJson ^. the @"compilerId"
         packages :: [Z.Package]
         packages = planJson ^. the @"installPlan"
-        predicate :: Z.Package -> Bool
-        predicate package = True
 
 loadPlan :: IO (Either AppError Z.PlanJson)
 loadPlan = (first fromString . eitherDecode) <$> LBS.readFile ("dist-newstyle" </> "cache" </> "plan.json")
@@ -87,7 +84,6 @@ mkPackageInfo basePath cid pkg = do
   let relativeLibPath   = T.unpack cid </> "lib"
   let libPrefix         = "libHS" <> pid
   absoluteConfPathExists <- IO.doesFileExist absoluteConfPath
-  libPathExists <- IO.doesDirectoryExist libPath
   libFiles <- getLibFiles relativeLibPath libPath libPrefix
   return PackageInfo
     { compilerId  = cid

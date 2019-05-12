@@ -11,7 +11,6 @@ import Data.Text              (Text)
 import Prelude                (IO, Show (..), ($), (.))
 
 import qualified Control.Concurrent.QSem as IO
-import qualified Data.Text               as T
 import qualified Data.Text.IO            as T
 import qualified System.IO               as IO
 import qualified System.IO.Unsafe        as IO
