@@ -116,7 +116,10 @@ runSyncToArchive opts = do
                 liftIO $ IO.createDirectoryIfMissing True workingStorePackagePath
 
                 let rp2 = Z.relativePaths storePath pInfo
-                CIO.putStrLn $ "Creating " <> toText scopedArchiveFile
+                -- either write "normal" package, or a user-specific one if the package cannot be shared
+                let targetFile = if canShare planData (Z.packageId pInfo) then archiveFile else scopedArchiveFile
+
+                CIO.putStrLn $ "Creating " <> toText targetFile
 
                 let tempArchiveFile = tempPath </> archiveFileBasename
 
@@ -124,20 +127,15 @@ runSyncToArchive opts = do
 
                 IO.createTar tempArchiveFile (metas:rp2)
 
-                void $ liftIO (LBS.readFile tempArchiveFile >>= IO.writeResource envAws scopedArchiveFile)
+                void $ catchError (liftIO (LBS.readFile tempArchiveFile) >>= IO.writeResource envAws targetFile) $ \case
+                  e@(AwsAppError (HTTP.Status 301 _)) -> do
+                    liftIO $ STM.atomically $ STM.writeTVar tEarlyExit True
+                    CIO.hPutStrLn IO.stderr $ mempty
+                      <> "ERROR: No write access to archive uris: "
+                      <> tshow (fmap toText [scopedArchiveFile, archiveFile])
+                      <> " " <> displayAppError e
 
-                when (canShare planData (Z.packageId pInfo)) $ do
-                  void $ catchError (IO.linkOrCopyResource envAws scopedArchiveFile archiveFile) $ \case
-                    e@(AwsAppError (HTTP.Status 301 _)) -> do
-                      liftIO $ STM.atomically $ STM.writeTVar tEarlyExit True
-                      CIO.hPutStrLn IO.stderr $ mempty
-                        <> "ERROR: No write access to archive uris: "
-                        <> tshow (fmap toText [scopedArchiveFile, archiveFile])
-                        <> " " <> displayAppError e
-
-                    _ -> return ()
-
-                  return ()
+                  _ -> return ()
 
     Left (appError :: AppError) -> do
       CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError appError
