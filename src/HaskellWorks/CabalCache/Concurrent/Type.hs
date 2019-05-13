@@ -11,9 +11,9 @@ module HaskellWorks.CabalCache.Concurrent.Type
 import GHC.Generics
 import HaskellWorks.CabalCache.Types (PackageId)
 
-import qualified Control.Concurrent.STM                as STM
-import qualified Data.Set                              as S
-import qualified HaskellWorks.CabalCache.Data.Relation as R
+import qualified Control.Concurrent.STM as STM
+import qualified Data.Relation          as R
+import qualified Data.Set               as S
 
 type ConsumerId = PackageId
 type ProviderId = PackageId

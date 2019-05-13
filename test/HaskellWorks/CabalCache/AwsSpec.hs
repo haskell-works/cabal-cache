@@ -28,7 +28,7 @@ import qualified System.Environment         as IO
 
 spec :: Spec
 spec = describe "HaskellWorks.CabalCache.QuerySpec" $ do
-  it "stub" $ requireTest $ do
+  xit "stub" $ requireTest $ do
     ci <- liftIO $ IO.lookupEnv "CI" <&> isJust
     unless ci $ do
       envAws <- liftIO $ mkEnv Oregon (const LBSC.putStrLn)

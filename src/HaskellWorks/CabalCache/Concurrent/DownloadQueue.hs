@@ -13,9 +13,9 @@ import Data.Set               ((\\))
 
 import qualified Control.Concurrent.STM                  as STM
 import qualified Data.Map                                as M
+import qualified Data.Relation                           as R
 import qualified Data.Set                                as S
 import qualified HaskellWorks.CabalCache.Concurrent.Type as Z
-import qualified HaskellWorks.CabalCache.Data.Relation   as R
 
 anchor :: Z.PackageId -> M.Map Z.ConsumerId Z.ProviderId -> M.Map Z.ConsumerId Z.ProviderId
 anchor root dependencies = M.union dependencies $ M.singleton root (mconcat (M.elems dependencies))
@@ -33,13 +33,13 @@ takeReady Z.DownloadQueue {..} = do
   uploading     <- STM.readTVar tUploading
   failures      <- STM.readTVar tFailures
 
-  let ready = R.range dependencies \\ R.domain dependencies \\ uploading \\ failures
+  let ready = R.ran dependencies \\ R.dom dependencies \\ uploading \\ failures
 
   case S.lookupMin ready of
     Just packageId -> do
       STM.writeTVar tUploading (S.insert packageId uploading)
       return (Just packageId)
-    Nothing -> if S.null (R.range dependencies \\ R.domain dependencies \\ failures)
+    Nothing -> if S.null (R.ran dependencies \\ R.dom dependencies \\ failures)
       then return Nothing
       else STM.retry
 
@@ -49,7 +49,7 @@ commit Z.DownloadQueue {..} packageId = do
   uploading     <- STM.readTVar tUploading
 
   STM.writeTVar tUploading    $ S.delete packageId uploading
-  STM.writeTVar tDependencies $ R.withoutRange (S.singleton packageId) dependencies
+  STM.writeTVar tDependencies $ R.withoutRan (S.singleton packageId) dependencies
 
 failDownload :: Z.DownloadQueue -> Z.PackageId -> STM.STM ()
 failDownload Z.DownloadQueue {..} packageId = do
