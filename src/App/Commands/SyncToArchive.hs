@@ -106,7 +106,11 @@ runSyncToArchive opts = do
             let archiveFile         = versionedArchiveUri </> T.pack archiveFileBasename
             let scopedArchiveFile   = versionedArchiveUri </> T.pack storePathHash </> T.pack archiveFileBasename
             let packageStorePath    = storePath </> Z.packageDir pInfo
-            archiveFileExists <- runResourceT $ IO.resourceExists envAws scopedArchiveFile
+
+            -- either write "normal" package, or a user-specific one if the package cannot be shared
+            let targetFile = if canShare planData (Z.packageId pInfo) then archiveFile else scopedArchiveFile
+
+            archiveFileExists <- runResourceT $ IO.resourceExists envAws targetFile
 
             unless archiveFileExists $ do
               packageStorePathExists <- doesDirectoryExist packageStorePath
@@ -116,8 +120,6 @@ runSyncToArchive opts = do
                 liftIO $ IO.createDirectoryIfMissing True workingStorePackagePath
 
                 let rp2 = Z.relativePaths storePath pInfo
-                -- either write "normal" package, or a user-specific one if the package cannot be shared
-                let targetFile = if canShare planData (Z.packageId pInfo) then archiveFile else scopedArchiveFile
 
                 CIO.putStrLn $ "Creating " <> toText targetFile
 
