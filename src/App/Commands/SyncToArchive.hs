@@ -125,7 +125,7 @@ runSyncToArchive opts = do
 
                 metas <- createMetadata tempPath pInfo [("store-path", LC8.pack storePath)]
 
-                IO.createTar tempArchiveFile (metas:rp2)
+                IO.createTar tempArchiveFile (rp2 <> [metas])
 
                 void $ catchError (liftIO (LBS.readFile tempArchiveFile) >>= IO.writeResource envAws targetFile) $ \case
                   e@(AwsAppError (HTTP.Status 301 _)) -> do
