@@ -113,7 +113,7 @@ The archive contains files in the following locations:
 Both tarballs are identical.  If they both exist then the first may be a symlink to the second
 when store on the filesystem.
 
-The direct subdirectories of the archive is the `${archive_verson}`, for example `v1`.  This is the
+The direct subdirectories of the archive is the `${archive_verson}`, for example `v2`.  This is the
 version of the archive format.  This corresponds to the major version of the `cabal-cache` package.
 
 The next directory may be the `${store_hash}` or the `${compiler_id}`.  If it is the `${store_hash}`
