@@ -94,5 +94,8 @@ mkPackageInfo basePath cid pkg = do
     }
 
 getLibFiles :: FilePath -> FilePath -> Text -> IO [Library]
-getLibFiles relativeLibPath libPath libPrefix =
-  fmap (relativeLibPath </>) . filter (List.isPrefixOf (T.unpack libPrefix)) <$> IO.listDirectory libPath
+getLibFiles relativeLibPath libPath libPrefix = do
+  libExists <- IO.doesDirectoryExist libPath
+  if libExists
+     then fmap (relativeLibPath </>) . filter (List.isPrefixOf (T.unpack libPrefix)) <$> IO.listDirectory libPath
+     else pure []
