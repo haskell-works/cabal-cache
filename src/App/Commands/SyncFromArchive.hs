@@ -20,8 +20,9 @@ import Data.ByteString.Lazy.Search      (replace)
 import Data.Generics.Product.Any        (the)
 import Data.Maybe
 import Data.Semigroup                   ((<>))
+import Foreign.C.Error ( eXDEV )
 import HaskellWorks.CabalCache.AppError
-import HaskellWorks.CabalCache.IO.Error (exceptWarn, maybeToExcept)
+import HaskellWorks.CabalCache.IO.Error (exceptWarn, maybeToExcept, catchErrno)
 import HaskellWorks.CabalCache.Location ((<.>), (</>))
 import HaskellWorks.CabalCache.Metadata (loadMetadata)
 import HaskellWorks.CabalCache.Show
@@ -153,7 +154,8 @@ runSyncFromArchive opts = do
                         when confPathExists $ do
                           confContents <- liftIO $ LBS.readFile theConfPath
                           liftIO $ LBS.writeFile tempConfPath (replace (LBS.toStrict oldStorePath) (C8.pack storePath) confContents)
-                          liftIO $ IO.renamePath tempConfPath theConfPath
+                          liftIO $ catchErrno [eXDEV] (IO.renameFile tempConfPath theConfPath) (IO.copyFile tempConfPath theConfPath >> IO.removeFile tempConfPath)
+
                         return True
           Nothing -> do
             CIO.hPutStrLn IO.stderr $ "Warning: Invalid package id: " <> packageId
