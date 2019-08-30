@@ -164,7 +164,7 @@ test-suite cabal-cache-test
   build-depends:        cabal-cache
   hs-source-dirs:       test
   ghc-options:          -threaded -rtsopts -with-rtsopts=-N
-  build-tools:          hspec-discover
+  build-tool-depends:   hspec-discover:hspec-discover
   other-modules:
       HaskellWorks.CabalCache.AwsSpec
       HaskellWorks.CabalCache.LocationSpec
