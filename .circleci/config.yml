@@ -50,7 +50,9 @@ workflows:
                   - homebrew-itself-cache
             - run:
                 name: Install GHC
-                command: brew install jq md5sha1sum ghc cabal-install
+                command: |
+                  brew update
+                  brew install jq md5sha1sum ghc cabal-install
 
             - save_cache:
                 key: homebrew-itself-cache
