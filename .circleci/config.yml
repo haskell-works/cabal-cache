@@ -12,6 +12,9 @@ executors:
   ghc-8_6_5_old:
     docker:
       - image: quay.io/haskell_works/ghc-8.6.5:ubuntu-16.04
+  ghc-8_8_1_old:
+    docker:
+      - image: quay.io/haskell_works/ghc-8.8.1:ubuntu-16.04
 
 workflows:
   multiple-ghc-build:
@@ -19,6 +22,15 @@ workflows:
       - haskell/build-with-binary-cache:
           name: GHC 8.6.5
           executor: ghc-8_6_5_old
+          context: haskell-ci
+          binary-cache-uri: ${BINARY_CACHE_URI-"http://hw-binary-cache-us-west-2-a.s3-website-us-west-2.amazonaws.com/archive"}
+          binary-cache-uri-suffix: -ubuntu-16.04
+          workspace-dir: workspace/ghc-8.6.5
+          write-result-workspace: true
+
+      - haskell/build-with-binary-cache:
+          name: GHC 8.8.1
+          executor: ghc-8_8_1_old
           context: haskell-ci
           binary-cache-uri: ${BINARY_CACHE_URI-"http://hw-binary-cache-us-west-2-a.s3-website-us-west-2.amazonaws.com/archive"}
           binary-cache-uri-suffix: -ubuntu-16.04
@@ -62,6 +74,7 @@ workflows:
           attach-workspace: true
           requires:
             - GHC 8.6.5
+            - GHC 8.8.1
             - Darwin
           checkout: true
           before-release:
