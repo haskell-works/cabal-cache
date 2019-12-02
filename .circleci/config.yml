@@ -25,6 +25,8 @@ workflows:
           context: haskell-ci
           binary-cache-uri: ${BINARY_CACHE_URI-"http://hw-binary-cache-us-west-2-a.s3-website-us-west-2.amazonaws.com/archive"}
           binary-cache-uri-suffix: -ubuntu-16.04
+          cabal-build-extra: --write-ghc-environment-files=ghc8.4.4+
+          cabal-test-extra: --test-show-details=direct
 
       - haskell/build-with-binary-cache:
           name: GHC 8.8.1
@@ -32,6 +34,8 @@ workflows:
           context: haskell-ci
           binary-cache-uri: ${BINARY_CACHE_URI-"http://hw-binary-cache-us-west-2-a.s3-website-us-west-2.amazonaws.com/archive"}
           binary-cache-uri-suffix: -ubuntu-16.04
+          cabal-build-extra: --write-ghc-environment-files=ghc8.4.4+
+          cabal-test-extra: --test-show-details=direct
           workspace-dir: workspace/ghc-8.6.5
           write-result-workspace: true
 
