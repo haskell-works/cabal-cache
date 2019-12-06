@@ -9,9 +9,13 @@ module App.Commands.SyncToArchive
   ( cmdSyncToArchive
   ) where
 
-import Antiope.Core                     (toText)
+import Antiope.Core                     (Region (..), toText)
 import Antiope.Env                      (mkEnv)
-import App.Commands.Options.Parser      (optsSyncToArchive)
+import Antiope.Options.Applicative
+import App.Commands.Options.Parser      (text)
+import App.Commands.Options.Types       (SyncToArchiveOptions (SyncToArchiveOptions))
+import App.Static                       (homeDirectory)
+import Control.Applicative
 import Control.Lens                     hiding ((<.>))
 import Control.Monad                    (filterM, unless, when)
 import Control.Monad.Except
@@ -21,7 +25,7 @@ import Data.List                        ((\\))
 import Data.Maybe
 import Data.Semigroup                   ((<>))
 import HaskellWorks.CabalCache.AppError
-import HaskellWorks.CabalCache.Location ((<.>), (</>))
+import HaskellWorks.CabalCache.Location (Location (..), toLocation, (<.>), (</>))
 import HaskellWorks.CabalCache.Metadata (createMetadata)
 import HaskellWorks.CabalCache.Show
 import HaskellWorks.CabalCache.Topology (buildPlanData, canShare)
@@ -33,6 +37,7 @@ import qualified App.Commands.Options.Types         as Z
 import qualified Control.Concurrent.STM             as STM
 import qualified Data.ByteString.Lazy               as LBS
 import qualified Data.ByteString.Lazy.Char8         as LC8
+import qualified Data.Text                          as Text
 import qualified Data.Text                          as T
 import qualified HaskellWorks.CabalCache.AWS.Env    as AWS
 import qualified HaskellWorks.CabalCache.Core       as Z
@@ -150,6 +155,47 @@ isShareable :: MonadIO m => FilePath -> Z.PackageInfo -> m Bool
 isShareable storePath pkg =
   let packageSharePath = storePath </> Z.packageDir pkg </> "share"
   in IO.listMaybeDirectory packageSharePath <&> (\\ ["doc"]) <&> null
+
+optsSyncToArchive :: Parser SyncToArchiveOptions
+optsSyncToArchive = SyncToArchiveOptions
+  <$> option (auto <|> text)
+      (  long "region"
+      <> metavar "AWS_REGION"
+      <> showDefault <> value Oregon
+      <> help "The AWS region in which to operate"
+      )
+  <*> option (maybeReader (toLocation . Text.pack))
+      (   long "archive-uri"
+      <>  help "Archive URI to sync to"
+      <>  metavar "S3_URI"
+      <>  value (Local $ homeDirectory </> ".cabal" </> "archive")
+      )
+  <*> strOption
+      (   long "store-path"
+      <>  help "Path to cabal store"
+      <>  metavar "DIRECTORY"
+      <>  value (homeDirectory </> ".cabal" </> "store")
+      )
+  <*> optional
+      ( strOption
+        (   long "store-path-hash"
+        <>  help "Store path hash (do not use)"
+        <>  metavar "HASH"
+        )
+      )
+  <*> option auto
+      (   long "threads"
+      <>  help "Number of concurrent threads"
+      <>  metavar "NUM_THREADS"
+      <>  value 4
+      )
+  <*> optional
+      ( option autoText
+        (   long "aws-log-level"
+        <>  help "AWS Log Level.  One of (Error, Info, Debug, Trace)"
+        <>  metavar "AWS_LOG_LEVEL"
+        )
+      )
 
 cmdSyncToArchive :: Mod CommandFields (IO ())
 cmdSyncToArchive = command "sync-to-archive"  $ flip info idm $ runSyncToArchive <$> optsSyncToArchive

@@ -8,9 +8,13 @@ module App.Commands.SyncFromArchive
   ( cmdSyncFromArchive
   ) where
 
-import Antiope.Core                     (runResAws, toText)
+import Antiope.Core                     (Region (..), runResAws, toText)
 import Antiope.Env                      (mkEnv)
-import App.Commands.Options.Parser      (optsSyncFromArchive)
+import Antiope.Options.Applicative
+import App.Commands.Options.Parser      (text)
+import App.Commands.Options.Types       (SyncFromArchiveOptions (SyncFromArchiveOptions))
+import App.Static                       (homeDirectory)
+import Control.Applicative
 import Control.Lens                     hiding ((<.>))
 import Control.Monad                    (unless, void, when)
 import Control.Monad.Catch              (MonadCatch)
@@ -20,10 +24,10 @@ import Data.ByteString.Lazy.Search      (replace)
 import Data.Generics.Product.Any        (the)
 import Data.Maybe
 import Data.Semigroup                   ((<>))
-import Foreign.C.Error ( eXDEV )
+import Foreign.C.Error                  (eXDEV)
 import HaskellWorks.CabalCache.AppError
-import HaskellWorks.CabalCache.IO.Error (exceptWarn, maybeToExcept, catchErrno)
-import HaskellWorks.CabalCache.Location ((<.>), (</>))
+import HaskellWorks.CabalCache.IO.Error (catchErrno, exceptWarn, maybeToExcept)
+import HaskellWorks.CabalCache.Location (Location (..), toLocation, (<.>), (</>))
 import HaskellWorks.CabalCache.Metadata (loadMetadata)
 import HaskellWorks.CabalCache.Show
 import HaskellWorks.CabalCache.Version  (archiveVersion)
@@ -186,6 +190,47 @@ onError h failureValue f = do
     Left _  -> return failureValue
     Right a -> return a
   where handler e = lift (h e) >> return failureValue
+
+optsSyncFromArchive :: Parser SyncFromArchiveOptions
+optsSyncFromArchive = SyncFromArchiveOptions
+  <$> option (auto <|> text)
+      (  long "region"
+      <> metavar "AWS_REGION"
+      <> showDefault <> value Oregon
+      <> help "The AWS region in which to operate"
+      )
+  <*> option (maybeReader (toLocation . T.pack))
+      (   long "archive-uri"
+      <>  help "Archive URI to sync to"
+      <>  metavar "S3_URI"
+      <>  value (Local $ homeDirectory </> ".cabal" </> "archive")
+      )
+  <*> strOption
+      (   long "store-path"
+      <>  help "Path to cabal store"
+      <>  metavar "DIRECTORY"
+      <>  value (homeDirectory </> ".cabal" </> "store")
+      )
+  <*> optional
+      ( strOption
+        (   long "store-path-hash"
+        <>  help "Store path hash (do not use)"
+        <>  metavar "HASH"
+        )
+      )
+  <*> option auto
+      (   long "threads"
+      <>  help "Number of concurrent threads"
+      <>  metavar "NUM_THREADS"
+      <>  value 4
+      )
+  <*> optional
+      ( option autoText
+        (   long "aws-log-level"
+        <>  help "AWS Log Level.  One of (Error, Info, Debug, Trace)"
+        <>  metavar "AWS_LOG_LEVEL"
+        )
+      )
 
 cmdSyncFromArchive :: Mod CommandFields (IO ())
 cmdSyncFromArchive = command "sync-from-archive"  $ flip info idm $ runSyncFromArchive <$> optsSyncFromArchive
