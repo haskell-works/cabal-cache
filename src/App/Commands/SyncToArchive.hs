@@ -80,69 +80,74 @@ runSyncToArchive opts = do
   mbPlan <- Z.loadPlan
   case mbPlan of
     Right planJson -> do
-      let compilerId = planJson ^. the @"compilerId"
-      envAws <- IO.unsafeInterleaveIO $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
-      let archivePath       = versionedArchiveUri </> compilerId
-      let scopedArchivePath = scopedArchiveUri </> compilerId
-      IO.createLocalDirectoryIfMissing archivePath
-      IO.createLocalDirectoryIfMissing scopedArchivePath
+      compilerContextResult <- runExceptT $ Z.mkCompilerContext planJson
 
-      packages     <- Z.getPackages storePath planJson
-      nonShareable <- packages & filterM (fmap not . isShareable storePath)
-      let planData = buildPlanData planJson (nonShareable ^.. each . the @"packageId")
+      case compilerContextResult of
+        Right compilerContext -> do
+          let compilerId = planJson ^. the @"compilerId"
+          envAws <- IO.unsafeInterleaveIO $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
+          let archivePath       = versionedArchiveUri </> compilerId
+          let scopedArchivePath = scopedArchiveUri </> compilerId
+          IO.createLocalDirectoryIfMissing archivePath
+          IO.createLocalDirectoryIfMissing scopedArchivePath
 
-      let storeCompilerPath           = storePath </> T.unpack compilerId
-      let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"
+          packages     <- Z.getPackages storePath planJson
+          nonShareable <- packages & filterM (fmap not . isShareable storePath)
+          let planData = buildPlanData planJson (nonShareable ^.. each . the @"packageId")
 
-      storeCompilerPackageDbPathExists <- doesDirectoryExist storeCompilerPackageDbPath
+          let storeCompilerPath           = storePath </> T.unpack compilerId
+          let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"
 
-      unless storeCompilerPackageDbPathExists $
-        GhcPkg.init storeCompilerPackageDbPath
+          storeCompilerPackageDbPathExists <- doesDirectoryExist storeCompilerPackageDbPath
 
-      CIO.putStrLn $ "Syncing " <> tshow (length packages) <> " packages"
+          unless storeCompilerPackageDbPathExists $
+            GhcPkg.init compilerContext storeCompilerPackageDbPath
 
-      IO.withSystemTempDirectory "cabal-cache" $ \tempPath -> do
-        CIO.putStrLn $ "Temp path: " <> tshow tempPath
+          CIO.putStrLn $ "Syncing " <> tshow (length packages) <> " packages"
 
-        IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> do
-          earlyExit <- STM.readTVarIO tEarlyExit
-          unless earlyExit $ do
-            let archiveFileBasename = Z.packageDir pInfo <.> ".tar.gz"
-            let archiveFile         = versionedArchiveUri </> T.pack archiveFileBasename
-            let scopedArchiveFile   = versionedArchiveUri </> T.pack storePathHash </> T.pack archiveFileBasename
-            let packageStorePath    = storePath </> Z.packageDir pInfo
+          IO.withSystemTempDirectory "cabal-cache" $ \tempPath -> do
+            CIO.putStrLn $ "Temp path: " <> tshow tempPath
 
-            -- either write "normal" package, or a user-specific one if the package cannot be shared
-            let targetFile = if canShare planData (Z.packageId pInfo) then archiveFile else scopedArchiveFile
+            IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> do
+              earlyExit <- STM.readTVarIO tEarlyExit
+              unless earlyExit $ do
+                let archiveFileBasename = Z.packageDir pInfo <.> ".tar.gz"
+                let archiveFile         = versionedArchiveUri </> T.pack archiveFileBasename
+                let scopedArchiveFile   = versionedArchiveUri </> T.pack storePathHash </> T.pack archiveFileBasename
+                let packageStorePath    = storePath </> Z.packageDir pInfo
 
-            archiveFileExists <- runResourceT $ IO.resourceExists envAws targetFile
+                -- either write "normal" package, or a user-specific one if the package cannot be shared
+                let targetFile = if canShare planData (Z.packageId pInfo) then archiveFile else scopedArchiveFile
 
-            unless archiveFileExists $ do
-              packageStorePathExists <- doesDirectoryExist packageStorePath
+                archiveFileExists <- runResourceT $ IO.resourceExists envAws targetFile
 
-              when packageStorePathExists $ void $ runExceptT $ IO.exceptWarn $ do
-                let workingStorePackagePath = tempPath </> Z.packageDir pInfo
-                liftIO $ IO.createDirectoryIfMissing True workingStorePackagePath
+                unless archiveFileExists $ do
+                  packageStorePathExists <- doesDirectoryExist packageStorePath
 
-                let rp2 = Z.relativePaths storePath pInfo
+                  when packageStorePathExists $ void $ runExceptT $ IO.exceptWarn $ do
+                    let workingStorePackagePath = tempPath </> Z.packageDir pInfo
+                    liftIO $ IO.createDirectoryIfMissing True workingStorePackagePath
 
-                CIO.putStrLn $ "Creating " <> toText targetFile
+                    let rp2 = Z.relativePaths storePath pInfo
 
-                let tempArchiveFile = tempPath </> archiveFileBasename
+                    CIO.putStrLn $ "Creating " <> toText targetFile
 
-                metas <- createMetadata tempPath pInfo [("store-path", LC8.pack storePath)]
+                    let tempArchiveFile = tempPath </> archiveFileBasename
 
-                IO.createTar tempArchiveFile (rp2 <> [metas])
+                    metas <- createMetadata tempPath pInfo [("store-path", LC8.pack storePath)]
 
-                void $ catchError (liftIO (LBS.readFile tempArchiveFile) >>= IO.writeResource envAws targetFile) $ \case
-                  e@(AwsAppError (HTTP.Status 301 _)) -> do
-                    liftIO $ STM.atomically $ STM.writeTVar tEarlyExit True
-                    CIO.hPutStrLn IO.stderr $ mempty
-                      <> "ERROR: No write access to archive uris: "
-                      <> tshow (fmap toText [scopedArchiveFile, archiveFile])
-                      <> " " <> displayAppError e
+                    IO.createTar tempArchiveFile (rp2 <> [metas])
 
-                  _ -> return ()
+                    void $ catchError (liftIO (LBS.readFile tempArchiveFile) >>= IO.writeResource envAws targetFile) $ \case
+                      e@(AwsAppError (HTTP.Status 301 _)) -> do
+                        liftIO $ STM.atomically $ STM.writeTVar tEarlyExit True
+                        CIO.hPutStrLn IO.stderr $ mempty
+                          <> "ERROR: No write access to archive uris: "
+                          <> tshow (fmap toText [scopedArchiveFile, archiveFile])
+                          <> " " <> displayAppError e
+
+                      _ -> return ()
+        Left msg -> CIO.hPutStrLn IO.stderr msg
 
     Left (appError :: AppError) -> do
       CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError appError

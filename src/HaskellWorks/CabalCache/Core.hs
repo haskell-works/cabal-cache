@@ -12,11 +12,13 @@ module HaskellWorks.CabalCache.Core
   , getPackages
   , relativePaths
   , loadPlan
+  , mkCompilerContext
   ) where
 
 import Control.DeepSeq                  (NFData)
 import Control.Lens                     hiding ((<.>))
 import Control.Monad                    (forM)
+import Control.Monad.Except
 import Data.Aeson                       (eitherDecode)
 import Data.Bifunctor                   (first)
 import Data.Bool                        (bool)
@@ -26,6 +28,7 @@ import Data.String
 import Data.Text                        (Text)
 import GHC.Generics                     (Generic)
 import HaskellWorks.CabalCache.AppError
+import HaskellWorks.CabalCache.Error
 import System.FilePath                  ((<.>), (</>))
 
 import qualified Data.ByteString.Lazy           as LBS
@@ -53,6 +56,13 @@ data PackageInfo = PackageInfo
   , confPath   :: Tagged ConfPath Presence
   , libs       :: [Library]
   } deriving (Show, Eq, Generic, NFData)
+
+mkCompilerContext :: MonadIO m => Z.PlanJson -> ExceptT Text m Z.CompilerContext
+mkCompilerContext plan = do
+  compilerVersion <- T.stripPrefix "ghc-" (plan ^. the @"compilerId") & nothingToError "No compiler version available in plan"
+  let ghcPkgCmd = "ghc-pkg-" <> compilerVersion
+  ghcPkgCmdPath <- liftIO (IO.findExecutable (T.unpack ghcPkgCmd)) >>= nothingToError (ghcPkgCmd <> " is not in path")
+  return (Z.CompilerContext [ghcPkgCmdPath])
 
 relativePaths :: FilePath -> PackageInfo -> [IO.TarGroup]
 relativePaths basePath pInfo =

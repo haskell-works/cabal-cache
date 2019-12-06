@@ -1,13 +1,24 @@
+{-# LANGUAGE DataKinds        #-}
+{-# LANGUAGE TypeApplications #-}
+
 module HaskellWorks.CabalCache.GhcPkg where
 
-import System.Exit    (ExitCode (..), exitWith)
-import System.Process (spawnProcess, waitForProcess)
+import Control.Lens
+import Data.Generics.Product.Any
+import System.Exit               (ExitCode (..), exitWith)
+import System.Process            (waitForProcess)
 
-import qualified System.IO as IO
+import qualified HaskellWorks.CabalCache.Types as Z
+import qualified System.IO                     as IO
+import qualified System.Process                as IO
 
-runGhcPkg :: [String] -> IO ()
-runGhcPkg params = do
-  hGhcPkg2 <- spawnProcess "ghc-pkg" params
+system :: [String] -> IO IO.ProcessHandle
+system (cmd:args) = IO.spawnProcess cmd args
+system []         = error "No command supplied" -- TODO Better error handling
+
+runGhcPkg :: Z.CompilerContext -> [String] -> IO ()
+runGhcPkg cc params = do
+  hGhcPkg2 <- system ((cc ^. the @"ghcPkgCmd") <> params)
   exitCodeGhcPkg2 <- waitForProcess hGhcPkg2
   case exitCodeGhcPkg2 of
     ExitFailure _ -> do
@@ -15,11 +26,11 @@ runGhcPkg params = do
       exitWith (ExitFailure 1)
     _ -> return ()
 
-testAvailability :: IO ()
-testAvailability = runGhcPkg ["--version"]
+testAvailability :: Z.CompilerContext -> IO ()
+testAvailability cc = runGhcPkg cc ["--version"]
 
-recache :: FilePath -> IO ()
-recache packageDb = runGhcPkg ["recache", "--package-db", packageDb]
+recache :: Z.CompilerContext -> FilePath -> IO ()
+recache cc packageDb = runGhcPkg cc ["recache", "--package-db", packageDb]
 
-init :: FilePath -> IO ()
-init packageDb = runGhcPkg ["init", packageDb]
+init :: Z.CompilerContext -> FilePath -> IO ()
+init cc packageDb = runGhcPkg cc ["init", packageDb]

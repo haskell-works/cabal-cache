@@ -40,6 +40,10 @@ data Lib = Lib
   , exeDepends :: [Text]
   } deriving (Eq, Show, Generic)
 
+newtype CompilerContext = CompilerContext
+  { ghcPkgCmd :: [String]
+  } deriving (Show, Eq, Generic)
+
 instance FromJSON PlanJson where
   parseJSON = withObject "PlanJson" $ \v -> PlanJson
     <$> v .: "compiler-id"

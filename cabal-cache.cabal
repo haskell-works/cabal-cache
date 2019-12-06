@@ -110,12 +110,13 @@ library
       App.Commands.SyncToArchive
       App.Commands.Version
       App.Static
-      HaskellWorks.CabalCache.AWS.Env
       HaskellWorks.CabalCache.AppError
+      HaskellWorks.CabalCache.AWS.Env
       HaskellWorks.CabalCache.Concurrent.DownloadQueue
       HaskellWorks.CabalCache.Concurrent.Fork
       HaskellWorks.CabalCache.Concurrent.Type
       HaskellWorks.CabalCache.Core
+      HaskellWorks.CabalCache.Error
       HaskellWorks.CabalCache.GhcPkg
       HaskellWorks.CabalCache.Hash
       HaskellWorks.CabalCache.IO.Console
