@@ -79,99 +79,104 @@ runSyncFromArchive opts = do
   CIO.putStrLn $ "Threads: "          <> tshow threads
   CIO.putStrLn $ "AWS Log level: "    <> tshow awsLogLevel
 
-  GhcPkg.testAvailability
-
   mbPlan <- Z.loadPlan
+
   case mbPlan of
     Right planJson -> do
-      envAws <- IO.unsafeInterleaveIO $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
-      let compilerId                  = planJson ^. the @"compilerId"
-      let storeCompilerPath           = storePath </> T.unpack compilerId
-      let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"
-      let storeCompilerLibPath        = storeCompilerPath </> "lib"
+      compilerContextResult <- runExceptT $ Z.mkCompilerContext planJson
 
-      CIO.putStrLn "Creating store directories"
-      createDirectoryIfMissing True storePath
-      createDirectoryIfMissing True storeCompilerPath
-      createDirectoryIfMissing True storeCompilerLibPath
+      case compilerContextResult of
+        Right compilerContext -> do
+          GhcPkg.testAvailability compilerContext
 
-      storeCompilerPackageDbPathExists <- doesDirectoryExist storeCompilerPackageDbPath
+          envAws <- IO.unsafeInterleaveIO $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
+          let compilerId                  = planJson ^. the @"compilerId"
+          let storeCompilerPath           = storePath </> T.unpack compilerId
+          let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"
+          let storeCompilerLibPath        = storeCompilerPath </> "lib"
 
-      unless storeCompilerPackageDbPathExists $ do
-        CIO.putStrLn "Package DB missing. Creating Package DB"
-        GhcPkg.init storeCompilerPackageDbPath
+          CIO.putStrLn "Creating store directories"
+          createDirectoryIfMissing True storePath
+          createDirectoryIfMissing True storeCompilerPath
+          createDirectoryIfMissing True storeCompilerLibPath
 
-      packages <- Z.getPackages storePath planJson
+          storeCompilerPackageDbPathExists <- doesDirectoryExist storeCompilerPackageDbPath
 
-      let installPlan = planJson ^. the @"installPlan"
-      let planPackages = M.fromList $ fmap (\p -> (p ^. the @"id", p)) installPlan
+          unless storeCompilerPackageDbPathExists $ do
+            CIO.putStrLn "Package DB missing. Creating Package DB"
+            GhcPkg.init compilerContext storeCompilerPackageDbPath
 
-      let planDeps0 = installPlan >>= \p -> fmap (p ^. the @"id", ) $ mempty
-            <> (p ^. the @"depends")
-            <> (p ^. the @"exeDepends")
-            <> (p ^.. the @"components" . each . the @"lib" . each . the @"depends"    . each)
-            <> (p ^.. the @"components" . each . the @"lib" . each . the @"exeDepends" . each)
-      let planDeps  = planDeps0 <> fmap (\p -> ("[universe]", p ^. the @"id")) installPlan
+          packages <- Z.getPackages storePath planJson
 
-      downloadQueue <- STM.atomically $ DQ.createDownloadQueue planDeps
+          let installPlan = planJson ^. the @"installPlan"
+          let planPackages = M.fromList $ fmap (\p -> (p ^. the @"id", p)) installPlan
 
-      let pInfos = M.fromList $ fmap (\p -> (p ^. the @"packageId", p)) packages
+          let planDeps0 = installPlan >>= \p -> fmap (p ^. the @"id", ) $ mempty
+                <> (p ^. the @"depends")
+                <> (p ^. the @"exeDepends")
+                <> (p ^.. the @"components" . each . the @"lib" . each . the @"depends"    . each)
+                <> (p ^.. the @"components" . each . the @"lib" . each . the @"exeDepends" . each)
+          let planDeps  = planDeps0 <> fmap (\p -> ("[universe]", p ^. the @"id")) installPlan
 
-      IO.withSystemTempDirectory "cabal-cache" $ \tempPath -> do
-        IO.createDirectoryIfMissing True (tempPath </> T.unpack compilerId </> "package.db")
+          downloadQueue <- STM.atomically $ DQ.createDownloadQueue planDeps
 
-        IO.forkThreadsWait threads $ DQ.runQueue downloadQueue $ \packageId -> case M.lookup packageId pInfos of
-          Just pInfo -> do
-            let archiveBaseName   = Z.packageDir pInfo <.> ".tar.gz"
-            let archiveFile       = versionedArchiveUri </> T.pack archiveBaseName
-            let scopedArchiveFile = scopedArchiveUri </> T.pack archiveBaseName
-            let packageStorePath  = storePath </> Z.packageDir pInfo
-            storeDirectoryExists <- doesDirectoryExist packageStorePath
-            let maybePackage = M.lookup packageId planPackages
+          let pInfos = M.fromList $ fmap (\p -> (p ^. the @"packageId", p)) packages
 
-            case maybePackage of
+          IO.withSystemTempDirectory "cabal-cache" $ \tempPath -> do
+            IO.createDirectoryIfMissing True (tempPath </> T.unpack compilerId </> "package.db")
+
+            IO.forkThreadsWait threads $ DQ.runQueue downloadQueue $ \packageId -> case M.lookup packageId pInfos of
+              Just pInfo -> do
+                let archiveBaseName   = Z.packageDir pInfo <.> ".tar.gz"
+                let archiveFile       = versionedArchiveUri </> T.pack archiveBaseName
+                let scopedArchiveFile = scopedArchiveUri </> T.pack archiveBaseName
+                let packageStorePath  = storePath </> Z.packageDir pInfo
+                storeDirectoryExists <- doesDirectoryExist packageStorePath
+                let maybePackage = M.lookup packageId planPackages
+
+                case maybePackage of
+                  Nothing -> do
+                    CIO.hPutStrLn IO.stderr $ "Warning: package not found" <> packageId
+                    return True
+                  Just package -> if skippable package
+                    then do
+                      CIO.putStrLn $ "Skipping: " <> packageId
+                      return True
+                    else if storeDirectoryExists
+                      then return True
+                      else runResAws envAws $ onError (cleanupStorePath packageStorePath packageId) False $ do
+                        (existingArchiveFileContents, existingArchiveFile) <- ExceptT $ IO.readFirstAvailableResource envAws [archiveFile, scopedArchiveFile]
+                        CIO.putStrLn $ "Extracting: " <> toText existingArchiveFile
+
+                        let tempArchiveFile = tempPath </> archiveBaseName
+                        liftIO $ LBS.writeFile tempArchiveFile existingArchiveFileContents
+                        IO.extractTar tempArchiveFile storePath
+
+                        meta <- loadMetadata packageStorePath
+                        oldStorePath <- maybeToExcept "store-path is missing from Metadata" (Map.lookup "store-path" meta)
+
+                        case Z.confPath pInfo of
+                          Z.Tagged conf _ -> do
+                            let theConfPath = storePath </> conf
+                            let tempConfPath = tempPath </> conf
+                            confPathExists <- liftIO $ IO.doesFileExist theConfPath
+                            when confPathExists $ do
+                              confContents <- liftIO $ LBS.readFile theConfPath
+                              liftIO $ LBS.writeFile tempConfPath (replace (LBS.toStrict oldStorePath) (C8.pack storePath) confContents)
+                              liftIO $ catchErrno [eXDEV] (IO.renameFile tempConfPath theConfPath) (IO.copyFile tempConfPath theConfPath >> IO.removeFile tempConfPath)
+
+                            return True
               Nothing -> do
-                CIO.hPutStrLn IO.stderr $ "Warning: package not found" <> packageId
+                CIO.hPutStrLn IO.stderr $ "Warning: Invalid package id: " <> packageId
                 return True
-              Just package -> if skippable package
-                then do
-                  CIO.putStrLn $ "Skipping: " <> packageId
-                  return True
-                else if storeDirectoryExists
-                  then return True
-                  else runResAws envAws $ onError (cleanupStorePath packageStorePath packageId) False $ do
-                    (existingArchiveFileContents, existingArchiveFile) <- ExceptT $ IO.readFirstAvailableResource envAws [archiveFile, scopedArchiveFile]
-                    CIO.putStrLn $ "Extracting: " <> toText existingArchiveFile
 
-                    let tempArchiveFile = tempPath </> archiveBaseName
-                    liftIO $ LBS.writeFile tempArchiveFile existingArchiveFileContents
-                    IO.extractTar tempArchiveFile storePath
+          CIO.putStrLn "Recaching package database"
+          GhcPkg.recache compilerContext storeCompilerPackageDbPath
 
-                    meta <- loadMetadata packageStorePath
-                    oldStorePath <- maybeToExcept "store-path is missing from Metadata" (Map.lookup "store-path" meta)
+          failures <- STM.atomically $ STM.readTVar $ downloadQueue ^. the @"tFailures"
 
-                    case Z.confPath pInfo of
-                      Z.Tagged conf _ -> do
-                        let theConfPath = storePath </> conf
-                        let tempConfPath = tempPath </> conf
-                        confPathExists <- liftIO $ IO.doesFileExist theConfPath
-                        when confPathExists $ do
-                          confContents <- liftIO $ LBS.readFile theConfPath
-                          liftIO $ LBS.writeFile tempConfPath (replace (LBS.toStrict oldStorePath) (C8.pack storePath) confContents)
-                          liftIO $ catchErrno [eXDEV] (IO.renameFile tempConfPath theConfPath) (IO.copyFile tempConfPath theConfPath >> IO.removeFile tempConfPath)
-
-                        return True
-          Nothing -> do
-            CIO.hPutStrLn IO.stderr $ "Warning: Invalid package id: " <> packageId
-            return True
-
-      CIO.putStrLn "Recaching package database"
-      GhcPkg.recache storeCompilerPackageDbPath
-
-      failures <- STM.atomically $ STM.readTVar $ downloadQueue ^. the @"tFailures"
-
-      forM_ failures $ \packageId -> CIO.hPutStrLn IO.stderr $ "Failed to download: " <> packageId
-
+          forM_ failures $ \packageId -> CIO.hPutStrLn IO.stderr $ "Failed to download: " <> packageId
+        Left msg -> CIO.hPutStrLn IO.stderr msg
     Left appError -> do
       CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError appError
 
