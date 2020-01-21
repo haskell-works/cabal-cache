@@ -20,7 +20,7 @@ data SyncToArchiveOptions = SyncToArchiveOptions
 
 data SyncFromArchiveOptions = SyncFromArchiveOptions
   { region        :: Region
-  , archiveUri    :: Location
+  , archiveUris   :: [Location]
   , storePath     :: FilePath
   , storePathHash :: Maybe String
   , threads       :: Int

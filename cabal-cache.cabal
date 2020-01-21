@@ -116,6 +116,7 @@ library
       HaskellWorks.CabalCache.Concurrent.Fork
       HaskellWorks.CabalCache.Concurrent.Type
       HaskellWorks.CabalCache.Core
+      HaskellWorks.CabalCache.Data.List
       HaskellWorks.CabalCache.Error
       HaskellWorks.CabalCache.GhcPkg
       HaskellWorks.CabalCache.Hash
