@@ -27,7 +27,7 @@ import Data.Semigroup                   ((<>))
 import Foreign.C.Error                  (eXDEV)
 import HaskellWorks.CabalCache.AppError
 import HaskellWorks.CabalCache.IO.Error (catchErrno, exceptWarn, maybeToExcept)
-import HaskellWorks.CabalCache.Location (Location (..), toLocation, (<.>), (</>))
+import HaskellWorks.CabalCache.Location (toLocation, (<.>), (</>))
 import HaskellWorks.CabalCache.Metadata (loadMetadata)
 import HaskellWorks.CabalCache.Show
 import HaskellWorks.CabalCache.Version  (archiveVersion)
@@ -38,6 +38,7 @@ import qualified App.Commands.Options.Types                       as Z
 import qualified Control.Concurrent.STM                           as STM
 import qualified Data.ByteString.Char8                            as C8
 import qualified Data.ByteString.Lazy                             as LBS
+import qualified Data.List                                        as L
 import qualified Data.Map                                         as M
 import qualified Data.Map.Strict                                  as Map
 import qualified Data.Text                                        as T
@@ -45,6 +46,7 @@ import qualified HaskellWorks.CabalCache.AWS.Env                  as AWS
 import qualified HaskellWorks.CabalCache.Concurrent.DownloadQueue as DQ
 import qualified HaskellWorks.CabalCache.Concurrent.Fork          as IO
 import qualified HaskellWorks.CabalCache.Core                     as Z
+import qualified HaskellWorks.CabalCache.Data.List                as L
 import qualified HaskellWorks.CabalCache.GhcPkg                   as GhcPkg
 import qualified HaskellWorks.CabalCache.Hash                     as H
 import qualified HaskellWorks.CabalCache.IO.Console               as CIO
@@ -64,17 +66,18 @@ skippable package = (package ^. the @"packageType" == "pre-existing")
 
 runSyncFromArchive :: Z.SyncFromArchiveOptions -> IO ()
 runSyncFromArchive opts = do
-  let storePath           = opts ^. the @"storePath"
-  let archiveUri          = opts ^. the @"archiveUri"
-  let threads             = opts ^. the @"threads"
-  let awsLogLevel         = opts ^. the @"awsLogLevel"
-  let versionedArchiveUri = archiveUri </> archiveVersion
-  let storePathHash       = opts ^. the @"storePathHash" & fromMaybe (H.hashStorePath storePath)
-  let scopedArchiveUri    = versionedArchiveUri </> T.pack storePathHash
+  let storePath             = opts ^. the @"storePath"
+  let archiveUris           = opts ^. the @"archiveUris"
+  let threads               = opts ^. the @"threads"
+  let awsLogLevel           = opts ^. the @"awsLogLevel"
+  let versionedArchiveUris  = archiveUris & each %~ (</> archiveVersion)
+  let storePathHash         = opts ^. the @"storePathHash" & fromMaybe (H.hashStorePath storePath)
+  let scopedArchiveUris     = versionedArchiveUris & each %~ (</> T.pack storePathHash)
 
   CIO.putStrLn $ "Store path: "       <> toText storePath
   CIO.putStrLn $ "Store path hash: "  <> T.pack storePathHash
-  CIO.putStrLn $ "Archive URI: "      <> toText archiveUri
+  forM_ archiveUris $ \archiveUri -> do
+    CIO.putStrLn $ "Archive URI: "      <> toText archiveUri
   CIO.putStrLn $ "Archive version: "  <> archiveVersion
   CIO.putStrLn $ "Threads: "          <> tshow threads
   CIO.putStrLn $ "AWS Log level: "    <> tshow awsLogLevel
@@ -127,10 +130,10 @@ runSyncFromArchive opts = do
 
             IO.forkThreadsWait threads $ DQ.runQueue downloadQueue $ \packageId -> case M.lookup packageId pInfos of
               Just pInfo -> do
-                let archiveBaseName   = Z.packageDir pInfo <.> ".tar.gz"
-                let archiveFile       = versionedArchiveUri </> T.pack archiveBaseName
-                let scopedArchiveFile = scopedArchiveUri </> T.pack archiveBaseName
-                let packageStorePath  = storePath </> Z.packageDir pInfo
+                let archiveBaseName     = Z.packageDir pInfo <.> ".tar.gz"
+                let archiveFiles        = versionedArchiveUris & each %~ (</> T.pack archiveBaseName)
+                let scopedArchiveFiles  = scopedArchiveUris & each %~ (</> T.pack archiveBaseName)
+                let packageStorePath    = storePath </> Z.packageDir pInfo
                 storeDirectoryExists <- doesDirectoryExist packageStorePath
                 let maybePackage = M.lookup packageId planPackages
 
@@ -145,7 +148,7 @@ runSyncFromArchive opts = do
                     else if storeDirectoryExists
                       then return True
                       else runResAws envAws $ onError (cleanupStorePath packageStorePath packageId) False $ do
-                        (existingArchiveFileContents, existingArchiveFile) <- ExceptT $ IO.readFirstAvailableResource envAws [archiveFile, scopedArchiveFile]
+                        (existingArchiveFileContents, existingArchiveFile) <- ExceptT $ IO.readFirstAvailableResource envAws (foldMap L.tuple2ToList (L.zip archiveFiles scopedArchiveFiles))
                         CIO.putStrLn $ "Extracting: " <> toText existingArchiveFile
 
                         let tempArchiveFile = tempPath </> archiveBaseName
@@ -204,11 +207,12 @@ optsSyncFromArchive = SyncFromArchiveOptions
       <> showDefault <> value Oregon
       <> help "The AWS region in which to operate"
       )
-  <*> option (maybeReader (toLocation . T.pack))
-      (   long "archive-uri"
-      <>  help "Archive URI to sync to"
-      <>  metavar "S3_URI"
-      <>  value (Local $ homeDirectory </> ".cabal" </> "archive")
+  <*> some
+      (  option (maybeReader (toLocation . T.pack))
+        (   long "archive-uri"
+        <>  help "Archive URI to sync to"
+        <>  metavar "S3_URI"
+        )
       )
   <*> strOption
       (   long "store-path"
