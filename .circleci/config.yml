@@ -42,6 +42,7 @@ workflows:
       - haskell/build-with-binary-cache:
           name: Darwin
           executor: darwin
+          context: haskell-ci
           run-tests: false
           fail-incoherent-builds: false
           write-result-workspace: true
