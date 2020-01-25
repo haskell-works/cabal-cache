@@ -1,7 +1,7 @@
 version: 2.1
 
 orbs:
-  haskell: haskell-works/haskell-build@4.0.5
+  haskell: haskell-works/haskell-build@dev:jky
   github: haskell-works/github-release@1.3.0
   hackage: haskell-works/hackage@1.1.0
 
@@ -39,7 +39,7 @@ workflows:
           workspace-dir: workspace/ghc-8.6.5
           write-result-workspace: true
 
-      - haskell/build-with-cci-cache:
+      - haskell/build-with-binary-cache:
           name: Darwin
           executor: darwin
           run-tests: false
@@ -61,12 +61,6 @@ workflows:
                 # because brew update takes up to 4 minutes for some reason.
                 paths: [/usr/local/Homebrew]
 
-            - run:
-                name: Install cabal-plan
-                command: |
-                  curl -L https://github.com/haskell-works/cabal-plan/releases/download/v0.5.0.0/cabal-plan_x86_osx.tar.gz -o cabal-plan_x86_osx.tar.gz
-                  tar zxvf cabal-plan_x86_osx.tar.gz -C /usr/local/bin cabal-plan
-                  rm cabal-plan_x86_osx.tar.gz
           filters:
             branches:
               only: master
