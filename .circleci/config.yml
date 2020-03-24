@@ -46,6 +46,7 @@ workflows:
           # binary-cache-uri: ${BINARY_CACHE_URI-"http://hw-binary-cache-us-west-2-a.s3-website-us-west-2.amazonaws.com/archive"}
           cabal-build-extra: --write-ghc-environment-files=ghc8.4.4+
           cabal-test-extra: --test-show-details=direct
+          workspace-dir: workspace/i386-ghc-8.8.3
           write-result-workspace: true
 
       - haskell/build-with-binary-cache:
@@ -91,6 +92,8 @@ workflows:
                 command: |
                   source ./workspace/ghc-8.8.3/project.env
                   tar zcvf /tmp/artefacts/${CIRCLE_PROJECT_REPONAME}_${BUILD_ARCH}_${BUILD_OS_NAME}.tar.gz -C ./workspace/ghc-8.8.3/dist/ ./${BUILD_EXE_NAME}
+                  source ./workspace/i386-ghc-8.8.3/project.env
+                  tar zcvf /tmp/artefacts/${CIRCLE_PROJECT_REPONAME}_${BUILD_ARCH}_${BUILD_OS_NAME}.tar.gz -C ./workspace/i386-ghc-8.8.3/dist/ ./${BUILD_EXE_NAME}
                   source ./workspace/osx/project.env
                   tar zcvf /tmp/artefacts/${CIRCLE_PROJECT_REPONAME}_${BUILD_ARCH}_${BUILD_OS_NAME}.tar.gz -C ./workspace/osx/dist/ ./${BUILD_EXE_NAME}
           filters:
