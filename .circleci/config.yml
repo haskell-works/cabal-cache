@@ -93,7 +93,7 @@ workflows:
                   source ./workspace/ghc-8.8.3/project.env
                   tar zcvf /tmp/artefacts/${CIRCLE_PROJECT_REPONAME}_${BUILD_ARCH}_${BUILD_OS_NAME}.tar.gz -C ./workspace/ghc-8.8.3/dist/ ./${BUILD_EXE_NAME}
                   source ./workspace/i386-ghc-8.8.3/project.env
-                  tar zcvf /tmp/artefacts/${CIRCLE_PROJECT_REPONAME}_${BUILD_ARCH}_${BUILD_OS_NAME}.tar.gz -C ./workspace/i386-ghc-8.8.3/dist/ ./${BUILD_EXE_NAME}
+                  tar zcvf /tmp/artefacts/i386-${CIRCLE_PROJECT_REPONAME}_${BUILD_ARCH}_${BUILD_OS_NAME}.tar.gz -C ./workspace/i386-ghc-8.8.3/dist/ ./${BUILD_EXE_NAME}
                   source ./workspace/osx/project.env
                   tar zcvf /tmp/artefacts/${CIRCLE_PROJECT_REPONAME}_${BUILD_ARCH}_${BUILD_OS_NAME}.tar.gz -C ./workspace/osx/dist/ ./${BUILD_EXE_NAME}
           filters:
