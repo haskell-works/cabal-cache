@@ -23,7 +23,6 @@ import Control.Monad.Trans.Resource     (runResourceT)
 import Data.Generics.Product.Any        (the)
 import Data.List                        ((\\))
 import Data.Maybe
-import Data.Semigroup                   ((<>))
 import HaskellWorks.CabalCache.AppError
 import HaskellWorks.CabalCache.Location (Location (..), toLocation, (<.>), (</>))
 import HaskellWorks.CabalCache.Metadata (createMetadata)

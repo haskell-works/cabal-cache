@@ -23,7 +23,6 @@ import Control.Monad.IO.Class           (liftIO)
 import Data.ByteString.Lazy.Search      (replace)
 import Data.Generics.Product.Any        (the)
 import Data.Maybe
-import Data.Semigroup                   ((<>))
 import Foreign.C.Error                  (eXDEV)
 import HaskellWorks.CabalCache.AppError
 import HaskellWorks.CabalCache.IO.Error (catchErrno, exceptWarn, maybeToExcept)

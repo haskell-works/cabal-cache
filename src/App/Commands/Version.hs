@@ -9,7 +9,6 @@ module App.Commands.Version
 
 import App.Commands.Options.Parser (optsVersion)
 import Data.List
-import Data.Semigroup              ((<>))
 import Options.Applicative         hiding (columns)
 
 import qualified App.Commands.Options.Types         as Z

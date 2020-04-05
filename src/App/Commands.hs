@@ -3,7 +3,6 @@ module App.Commands where
 import App.Commands.SyncFromArchive
 import App.Commands.SyncToArchive
 import App.Commands.Version
-import Data.Semigroup               ((<>))
 import Options.Applicative
 
 commands :: Parser (IO ())

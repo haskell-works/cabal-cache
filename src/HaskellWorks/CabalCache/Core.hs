@@ -23,7 +23,6 @@ import Data.Aeson                       (eitherDecode)
 import Data.Bifunctor                   (first)
 import Data.Bool                        (bool)
 import Data.Generics.Product.Any        (the)
-import Data.Semigroup                   ((<>))
 import Data.String
 import Data.Text                        (Text)
 import GHC.Generics                     (Generic)
