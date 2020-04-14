@@ -26,7 +26,7 @@ workflows:
           binary-cache-uri: ${BINARY_CACHE_URI-"http://hw-binary-cache-us-west-2-a.s3-website-us-west-2.amazonaws.com/archive"}
           binary-cache-uri-suffix: -ubuntu-16.04
           cabal-build-extra: --write-ghc-environment-files=ghc8.4.4+
-          cabal-test-extra: --test-show-details=direct
+          cabal-test-extra: --test-show-details=direct --test-options='+RTS -g1'
 
       - haskell/build-with-binary-cache:
           name: GHC 8.8.3
@@ -35,7 +35,7 @@ workflows:
           binary-cache-uri: ${BINARY_CACHE_URI-"http://hw-binary-cache-us-west-2-a.s3-website-us-west-2.amazonaws.com/archive"}
           binary-cache-uri-suffix: -ubuntu-16.04
           cabal-build-extra: --write-ghc-environment-files=ghc8.4.4+
-          cabal-test-extra: --test-show-details=direct
+          cabal-test-extra: --test-show-details=direct --test-options='+RTS -g1'
           workspace-dir: workspace/ghc-8.8.3
           write-result-workspace: true
 
@@ -46,7 +46,7 @@ workflows:
           cabal-cache-uri: https://github.com/haskell-works/cabal-cache/releases/download/v1.0.1.7/i386-cabal-cache_x86_64_linux.tar.gz
           binary-cache-uri: ${BINARY_CACHE_URI-"http://hw-binary-cache-us-west-2-a.s3-website-us-west-2.amazonaws.com/archive"}
           cabal-build-extra: --write-ghc-environment-files=ghc8.4.4+
-          cabal-test-extra: --test-show-details=direct
+          cabal-test-extra: --test-show-details=direct --test-options='+RTS -g1'
           workspace-dir: workspace/i386-ghc-8.8.3
           write-result-workspace: true
 
