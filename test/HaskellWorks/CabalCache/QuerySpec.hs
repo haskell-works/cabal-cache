@@ -16,9 +16,9 @@ import qualified Data.Aeson                    as A
 import qualified Data.ByteString.Lazy          as LBS
 import qualified HaskellWorks.CabalCache.Types as Z
 
-{-# ANN module ("HLint: ignore Redundant do"        :: String) #-}
-{-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
-{-# ANN module ("HLint: ignore Redundant bracket"   :: String) #-}
+{- HLINT ignore "Redundant do"        -}
+{- HLINT ignore "Reduce duplication"  -}
+{- HLINT ignore "Redundant bracket"   -}
 
 spec :: Spec
 spec = describe "HaskellWorks.Assist.QuerySpec" $ do

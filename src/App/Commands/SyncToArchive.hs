@@ -54,8 +54,8 @@ import qualified System.IO.Temp                     as IO
 import qualified System.IO.Unsafe                   as IO
 import qualified UnliftIO.Async                     as IO
 
-{-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
-{-# ANN module ("HLint: ignore Redundant do"        :: String) #-}
+{- HLINT ignore "Redundant do"        -}
+{- HLINT ignore "Reduce duplication"  -}
 
 runSyncToArchive :: Z.SyncToArchiveOptions -> IO ()
 runSyncToArchive opts = do
