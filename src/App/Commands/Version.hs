@@ -17,8 +17,8 @@ import qualified Data.Version                       as V
 import qualified HaskellWorks.CabalCache.IO.Console as CIO
 import qualified Paths_cabal_cache                  as P
 
-{-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
-{-# ANN module ("HLint: ignore Redundant do"        :: String) #-}
+{- HLINT ignore "Redundant do"        -}
+{- HLINT ignore "Reduce duplication"  -}
 
 runVersion :: Z.VersionOptions -> IO ()
 runVersion _ = do

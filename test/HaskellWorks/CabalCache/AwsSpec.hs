@@ -22,9 +22,9 @@ import qualified Data.ByteString.Lazy.Char8 as LBSC
 import qualified Network.HTTP.Types         as HTTP
 import qualified System.Environment         as IO
 
-{-# ANN module ("HLint: ignore Redundant do"        :: String) #-}
-{-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
-{-# ANN module ("HLint: ignore Redundant bracket"   :: String) #-}
+{- HLINT ignore "Redundant do"        -}
+{- HLINT ignore "Reduce duplication"  -}
+{- HLINT ignore "Redundant bracket"   -}
 
 spec :: Spec
 spec = describe "HaskellWorks.CabalCache.QuerySpec" $ do
