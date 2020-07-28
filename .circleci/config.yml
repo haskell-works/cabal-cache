@@ -66,7 +66,15 @@ workflows:
                 name: Install GHC
                 command: |
                   brew update
-                  brew install jq md5sha1sum ghc cabal-install
+                  brew upgrade python@3
+                  brew install jq libsodium bc pkg-config shellcheck md5sha1sum
+                  curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | BOOTSTRAP_HASKELL_NONINTERACTIVE=1 sh
+                  cat >> $BASH_ENV \<<EOF
+                  export PATH="$HOME/.ghcup/bin:$PATH"
+                  EOF
+                  source $BASH_ENV
+                  ghcup install 8.8.3
+                  ghcup set 8.8.3
             - save_cache:
                 key: homebrew-itself-cache
                 # I cache Homebrew itself, not the stuff that is installed with it
