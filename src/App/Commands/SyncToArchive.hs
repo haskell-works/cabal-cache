@@ -14,7 +14,7 @@ import Antiope.Env                      (mkEnv)
 import Antiope.Options.Applicative
 import App.Commands.Options.Parser      (text)
 import App.Commands.Options.Types       (SyncToArchiveOptions (SyncToArchiveOptions))
-import App.Static                       (homeDirectory)
+import App.Static                       (cabalDirectory)
 import Control.Applicative
 import Control.Lens                     hiding ((<.>))
 import Control.Monad                    (filterM, unless, when)
@@ -172,13 +172,13 @@ optsSyncToArchive = SyncToArchiveOptions
       (   long "archive-uri"
       <>  help "Archive URI to sync to"
       <>  metavar "S3_URI"
-      <>  value (Local $ homeDirectory </> ".cabal" </> "archive")
+      <>  value (Local $ cabalDirectory </> "archive")
       )
   <*> strOption
       (   long "store-path"
       <>  help "Path to cabal store"
       <>  metavar "DIRECTORY"
-      <>  value (homeDirectory </> ".cabal" </> "store")
+      <>  value (cabalDirectory </> "store")
       )
   <*> optional
       ( strOption

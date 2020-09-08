@@ -13,7 +13,7 @@ import Antiope.Env                      (mkEnv)
 import Antiope.Options.Applicative
 import App.Commands.Options.Parser      (text)
 import App.Commands.Options.Types       (SyncFromArchiveOptions (SyncFromArchiveOptions))
-import App.Static                       (homeDirectory)
+import App.Static                       (cabalDirectory)
 import Control.Applicative
 import Control.Lens                     hiding ((<.>))
 import Control.Monad                    (unless, void, when)
@@ -217,7 +217,7 @@ optsSyncFromArchive = SyncFromArchiveOptions
       (   long "store-path"
       <>  help "Path to cabal store"
       <>  metavar "DIRECTORY"
-      <>  value (homeDirectory </> ".cabal" </> "store")
+      <>  value (cabalDirectory </> "store")
       )
   <*> optional
       ( strOption
