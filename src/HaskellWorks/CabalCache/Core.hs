@@ -4,7 +4,9 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeApplications      #-}
+
 module HaskellWorks.CabalCache.Core
   ( PackageInfo(..)
   , Tagged(..)
@@ -18,6 +20,7 @@ module HaskellWorks.CabalCache.Core
 import Control.DeepSeq                  (NFData)
 import Control.Lens                     hiding ((<.>))
 import Control.Monad                    (forM)
+import Control.Monad.Catch
 import Control.Monad.Except
 import Data.Aeson                       (eitherDecode)
 import Data.Bifunctor                   (first)
@@ -28,14 +31,16 @@ import Data.Text                        (Text)
 import GHC.Generics                     (Generic)
 import HaskellWorks.CabalCache.AppError
 import HaskellWorks.CabalCache.Error
+import HaskellWorks.CabalCache.Show
 import System.FilePath                  ((<.>), (</>))
 
 import qualified Data.ByteString.Lazy           as LBS
-import qualified Data.List                      as List
+import qualified Data.List                      as L
 import qualified Data.Text                      as T
 import qualified HaskellWorks.CabalCache.IO.Tar as IO
 import qualified HaskellWorks.CabalCache.Types  as Z
 import qualified System.Directory               as IO
+import qualified System.Process                 as IO
 
 type PackageDir = FilePath
 type ConfPath   = FilePath
@@ -56,12 +61,32 @@ data PackageInfo = PackageInfo
   , libs       :: [Library]
   } deriving (Show, Eq, Generic, NFData)
 
-mkCompilerContext :: MonadIO m => Z.PlanJson -> ExceptT Text m Z.CompilerContext
+(<||>) :: Monad m => ExceptT e m a -> ExceptT e m a -> ExceptT e m a
+(<||>) f g = f `catchError` const g
+
+findExecutable :: MonadIO m => Text -> ExceptT Text m Text
+findExecutable exe = fmap T.pack $
+  liftIO (IO.findExecutable (T.unpack exe)) >>= nothingToError (exe <> " is not in path")
+
+runGhcPkg :: (MonadIO m, MonadCatch m) => Text -> [Text] -> ExceptT Text m Text
+runGhcPkg cmdExe args = catch (liftIO $ T.pack <$> IO.readProcess (T.unpack cmdExe) (fmap T.unpack args) "") $
+  \(e :: IOError) -> throwError $ "Unable to run " <> cmdExe <> " " <> T.unwords args <> ": " <> tshow e
+
+verifyGhcPkgVersion :: (MonadIO m, MonadCatch m) => Text -> Text -> ExceptT Text m Text
+verifyGhcPkgVersion version cmdExe = do
+  stdout <- runGhcPkg cmdExe ["--version"]
+  if T.isSuffixOf (" " <> version) (mconcat (L.take 1 (T.lines stdout)))
+    then return cmdExe
+    else throwError $ cmdExe <> "has is not of version " <> version
+
+mkCompilerContext :: (MonadIO m, MonadCatch m) => Z.PlanJson -> ExceptT Text m Z.CompilerContext
 mkCompilerContext plan = do
   compilerVersion <- T.stripPrefix "ghc-" (plan ^. the @"compilerId") & nothingToError "No compiler version available in plan"
-  let ghcPkgCmd = "ghc-pkg-" <> compilerVersion
-  ghcPkgCmdPath <- liftIO (IO.findExecutable (T.unpack ghcPkgCmd)) >>= nothingToError (ghcPkgCmd <> " is not in path")
-  return (Z.CompilerContext [ghcPkgCmdPath])
+  let versionedGhcPkgCmd = "ghc-pkg-" <> compilerVersion
+  ghcPkgCmdPath <-
+          (findExecutable versionedGhcPkgCmd  >>= verifyGhcPkgVersion compilerVersion)
+    <||>  (findExecutable "ghc-pkg"           >>= verifyGhcPkgVersion compilerVersion)
+  return (Z.CompilerContext [T.unpack ghcPkgCmdPath])
 
 relativePaths :: FilePath -> PackageInfo -> [IO.TarGroup]
 relativePaths basePath pInfo =
@@ -106,5 +131,5 @@ getLibFiles :: FilePath -> FilePath -> Text -> IO [Library]
 getLibFiles relativeLibPath libPath libPrefix = do
   libExists <- IO.doesDirectoryExist libPath
   if libExists
-     then fmap (relativeLibPath </>) . filter (List.isPrefixOf (T.unpack libPrefix)) <$> IO.listDirectory libPath
+     then fmap (relativeLibPath </>) . filter (L.isPrefixOf (T.unpack libPrefix)) <$> IO.listDirectory libPath
      else pure []

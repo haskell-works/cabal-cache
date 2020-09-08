@@ -110,6 +110,9 @@ library
       App.Commands.SyncToArchive
       App.Commands.Version
       App.Static
+      App.Static.Base
+      App.Static.Posix
+      App.Static.Windows
       HaskellWorks.CabalCache.AppError
       HaskellWorks.CabalCache.AWS.Env
       HaskellWorks.CabalCache.Concurrent.DownloadQueue

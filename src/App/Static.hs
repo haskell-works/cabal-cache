@@ -1,8 +1,8 @@
 module App.Static where
 
-import qualified System.Directory as IO
-import qualified System.IO.Unsafe as IO
+import qualified App.Static.Base    as S
+import qualified App.Static.Posix   as P
+import qualified App.Static.Windows as W
 
-homeDirectory :: FilePath
-homeDirectory = IO.unsafePerformIO $ IO.getHomeDirectory
-{-# NOINLINE homeDirectory #-}
+cabalDirectory :: FilePath
+cabalDirectory = if S.isPosix then P.cabalDirectory else W.cabalDirectory

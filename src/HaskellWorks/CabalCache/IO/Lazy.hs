@@ -27,7 +27,6 @@ import HaskellWorks.CabalCache.Location (Location (..))
 import HaskellWorks.CabalCache.Show
 
 import qualified Antiope.S3.Lazy                    as AWS
-import qualified Antiope.S3.Types                   as AWS
 import qualified Control.Concurrent                 as IO
 import qualified Data.ByteString.Lazy               as LBS
 import qualified Data.Text                          as T
