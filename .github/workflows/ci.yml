@@ -14,7 +14,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         ghc: ["8.8.4", "8.6.5"]
         os: [ubuntu-latest, macOS-latest, windows-latest]
@@ -34,7 +34,7 @@ jobs:
                      -e 's/cabal_cache/cbc/g' \
                      cabal-cache.cabal
           sed -i.bak -e 's/Paths_cabal_cache/Paths_cbc/g' \
-                     src/**/*.hs exe/*.hs
+                     src/**/*.hs app/*.hs
 
       - name: Set some window specific things
         if: matrix.os == 'windows-latest'
