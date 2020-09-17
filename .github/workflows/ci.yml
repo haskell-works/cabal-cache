@@ -31,10 +31,12 @@ jobs:
       - uses: actions/cache@v2
         name: Cache cabal store
         with:
-          path: ${{ steps.setup-haskell.outputs.cabal-store }}
-          key: cabal-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('cabal-cache.cabal') }}-${{ github.sha }}
+          path: |
+            ${{ steps.setup-haskell.outputs.cabal-store }}
+            dist-newstyle
+          key: cache-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('cabal-cache.cabal') }}-${{ github.sha }}
           restore-keys: |
-            cabal-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('cabal-cache.cabal') }}-
+            cache-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('cabal-cache.cabal') }}-
 
       - name: Shorten binary names
         run: |
@@ -65,10 +67,10 @@ jobs:
         env:
           GHC_VER: ${{ matrix.ghc }}
         run: |
-          HS_BIN=$(find dist-newstyle \( -name 'cbc' -o -name 'cbc.exe' \) -type f -executable)
+          HS_BIN=$(find dist-newstyle \( -name 'cbc' -o -name 'cbc.exe' \) -type f)
           test -f "$HS_BIN"
           NAME=cabal-cache-$GHC_VER
-          mv $HS_BIN $NAME${{env.EXE_EXT}}
+          cp $HS_BIN $NAME${{env.EXE_EXT}}
           if [[ "$OSTYPE" == "msys" ]]; then
             7z a $NAME.zip $NAME${{env.EXE_EXT}}
             echo ::set-output name=path::$NAME.zip
