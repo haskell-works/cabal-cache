@@ -13,7 +13,6 @@ module HaskellWorks.CabalCache.IO.Tar
 import Control.DeepSeq                  (NFData)
 import Control.Lens
 import Control.Monad.Except
-import Control.Monad.IO.Class           (MonadIO, liftIO)
 import Data.Generics.Product.Any
 import GHC.Generics
 import HaskellWorks.CabalCache.AppError

@@ -19,7 +19,6 @@ module HaskellWorks.CabalCache.Core
 
 import Control.DeepSeq                  (NFData)
 import Control.Lens                     hiding ((<.>))
-import Control.Monad                    (forM)
 import Control.Monad.Catch
 import Control.Monad.Except
 import Data.Aeson                       (eitherDecode)

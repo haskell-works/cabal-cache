@@ -16,7 +16,6 @@ import App.Commands.Options.Parser      (text)
 import App.Commands.Options.Types       (SyncToArchiveOptions (SyncToArchiveOptions))
 import Control.Applicative
 import Control.Lens                     hiding ((<.>))
-import Control.Monad                    (filterM, unless, when)
 import Control.Monad.Except
 import Control.Monad.Trans.Resource     (runResourceT)
 import Data.Generics.Product.Any        (the)

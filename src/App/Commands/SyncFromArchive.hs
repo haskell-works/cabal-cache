@@ -15,10 +15,8 @@ import App.Commands.Options.Parser      (text)
 import App.Commands.Options.Types       (SyncFromArchiveOptions (SyncFromArchiveOptions))
 import Control.Applicative
 import Control.Lens                     hiding ((<.>))
-import Control.Monad                    (unless, void, when)
 import Control.Monad.Catch              (MonadCatch)
 import Control.Monad.Except
-import Control.Monad.IO.Class           (liftIO)
 import Data.ByteString.Lazy.Search      (replace)
 import Data.Generics.Product.Any        (the)
 import Data.Maybe

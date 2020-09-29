@@ -1,6 +1,9 @@
+{-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications    #-}
+
 module HaskellWorks.CabalCache.IO.Lazy
   ( readResource
   , readFirstAvailableResource
@@ -15,13 +18,13 @@ module HaskellWorks.CabalCache.IO.Lazy
   ) where
 
 import Antiope.Core
+import Antiope.S3.Lazy                  (S3Uri)
 import Control.Lens
-import Control.Monad                    (void)
 import Control.Monad.Catch
 import Control.Monad.Except
 import Control.Monad.Trans.Resource
 import Data.Either                      (isRight)
-import Data.Text                        (Text)
+import Data.Generics.Product.Any
 import HaskellWorks.CabalCache.AppError
 import HaskellWorks.CabalCache.Location (Location (..))
 import HaskellWorks.CabalCache.Show
@@ -62,17 +65,18 @@ handleHttpError f = catch (Right <$> f) $ \(e :: HTTP.HttpException) ->
     _                                 -> throwM e
 
 getS3Uri :: (MonadResource m, MonadCatch m) => AWS.Env -> AWS.S3Uri -> m (Either AppError LBS.ByteString)
-getS3Uri envAws (AWS.S3Uri b k) = handleAwsError $ runAws envAws $ AWS.unsafeDownload b k
+getS3Uri envAws s3Uri = case reslashS3Uri s3Uri of
+  (AWS.S3Uri b k) -> handleAwsError $ runAws envAws $ AWS.unsafeDownload b k
 
 readResource :: (MonadResource m, MonadCatch m) => AWS.Env -> Location -> m (Either AppError LBS.ByteString)
 readResource envAws = \case
-  S3 s3Uri        -> getS3Uri envAws s3Uri
+  S3 s3Uri        -> getS3Uri envAws (reslashS3Uri s3Uri)
   Local path      -> liftIO $ do
     fileExists <- IO.doesFileExist path
     if fileExists
       then Right <$> LBS.readFile path
       else pure (Left NotFound)
-  HttpUri httpUri -> liftIO $ readHttpUri httpUri
+  HttpUri httpUri -> liftIO $ readHttpUri (reslashHttpUri httpUri)
 
 readFirstAvailableResource :: (MonadResource m, MonadCatch m) => AWS.Env -> [Location] -> m (Either AppError (LBS.ByteString, Location))
 readFirstAvailableResource _ [] = return (Left (GenericAppError "No resources specified in read"))
@@ -93,8 +97,8 @@ safePathIsSymbolLink filePath = catch (IO.pathIsSymbolicLink filePath) handler
 
 resourceExists :: (MonadUnliftIO m, MonadCatch m, MonadIO m) => AWS.Env -> Location -> m Bool
 resourceExists envAws = \case
-  S3 s3Uri        -> isRight <$> runResourceT (headS3Uri envAws s3Uri)
-  HttpUri httpUri -> isRight <$> headHttpUri httpUri
+  S3 s3Uri        -> isRight <$> runResourceT (headS3Uri envAws (reslashS3Uri s3Uri))
+  HttpUri httpUri -> isRight <$> headHttpUri (reslashHttpUri httpUri)
   Local path  -> do
     fileExists <- liftIO $ IO.doesFileExist path
     if fileExists
@@ -116,17 +120,25 @@ firstExistingResource envAws (a:as) = do
     else firstExistingResource envAws as
 
 headS3Uri :: (MonadResource m, MonadCatch m) => AWS.Env -> AWS.S3Uri -> m (Either AppError AWS.HeadObjectResponse)
-headS3Uri envAws (AWS.S3Uri b k) = handleAwsError $ runAws envAws $ AWS.send $ AWS.headObject b k
+headS3Uri envAws s3Uri = case reslashS3Uri s3Uri of
+  AWS.S3Uri b k -> handleAwsError $ runAws envAws $ AWS.send $ AWS.headObject b k
 
 uploadToS3 :: (MonadUnliftIO m, MonadCatch m) => AWS.Env -> AWS.S3Uri -> LBS.ByteString -> m (Either AppError ())
-uploadToS3 envAws (AWS.S3Uri b k) lbs = do
-  let req = AWS.toBody lbs
-  let po  = AWS.putObject b k req
-  handleAwsError $ void $ runResAws envAws $ AWS.send po
+uploadToS3 envAws s3Uri lbs = case reslashS3Uri s3Uri of
+  AWS.S3Uri b k -> do
+    let req = AWS.toBody lbs
+    let po  = AWS.putObject b k req
+    handleAwsError $ void $ runResAws envAws $ AWS.send po
+
+reslashS3Uri :: S3Uri -> S3Uri
+reslashS3Uri uri = uri & the @"objectKey" . the @1 %~ (T.replace "\\" "/")
+
+reslashHttpUri :: Text -> Text
+reslashHttpUri = T.replace "\\" "/"
 
 writeResource :: (MonadUnliftIO m, MonadCatch m) => AWS.Env -> Location -> LBS.ByteString -> ExceptT AppError m ()
 writeResource envAws loc lbs = ExceptT $ case loc of
-  S3 s3Uri   -> uploadToS3 envAws s3Uri lbs
+  S3 s3Uri   -> uploadToS3 envAws (reslashS3Uri s3Uri) lbs
   Local path -> liftIO (LBS.writeFile path lbs) >> return (Right ())
   HttpUri _  -> return (Left (GenericAppError "HTTP PUT method not supported"))
 
@@ -137,18 +149,19 @@ createLocalDirectoryIfMissing = \case
   HttpUri _   -> return ()
 
 copyS3Uri :: (MonadUnliftIO m, MonadCatch m) => AWS.Env -> AWS.S3Uri -> AWS.S3Uri -> ExceptT AppError m ()
-copyS3Uri envAws (AWS.S3Uri sourceBucket sourceObjectKey) (AWS.S3Uri targetBucket targetObjectKey) = ExceptT $ do
-  responseResult <- runResourceT $
-    handleAwsError $ runAws envAws $ AWS.send (AWS.copyObject targetBucket (toText sourceBucket <> "/" <> toText sourceObjectKey) targetObjectKey)
-  case responseResult of
-    Right response -> do
-      let responseCode = response ^. AWS.corsResponseStatus
-      if 200 <= responseCode && responseCode < 300
-        then return (Right ())
-        else do
-          liftIO $ CIO.hPutStrLn IO.stderr $ "Error in S3 copy: " <> tshow response
-          return (Left RetriesFailedAppError)
-    Left msg -> return (Left msg)
+copyS3Uri envAws source target = case (reslashS3Uri source, reslashS3Uri target) of
+  (AWS.S3Uri sourceBucket sourceObjectKey, AWS.S3Uri targetBucket targetObjectKey) -> ExceptT $ do
+    responseResult <- runResourceT $
+      handleAwsError $ runAws envAws $ AWS.send (AWS.copyObject targetBucket (toText sourceBucket <> "/" <> toText sourceObjectKey) targetObjectKey)
+    case responseResult of
+      Right response -> do
+        let responseCode = response ^. AWS.corsResponseStatus
+        if 200 <= responseCode && responseCode < 300
+          then return (Right ())
+          else do
+            liftIO $ CIO.hPutStrLn IO.stderr $ "Error in S3 copy: " <> tshow response
+            return (Left RetriesFailedAppError)
+      Left msg -> return (Left msg)
 
 retry :: (Show e, MonadIO m) => Int -> ExceptT e m () -> ExceptT e m ()
 retry = retryWhen (const True)
@@ -169,7 +182,7 @@ retryUnless p = retryWhen (not . p)
 linkOrCopyResource :: (MonadUnliftIO m, MonadCatch m) => AWS.Env -> Location -> Location -> ExceptT AppError m ()
 linkOrCopyResource envAws source target = case source of
   S3 sourceS3Uri -> case target of
-    S3 targetS3Uri -> retryUnless ((== Just 301) . appErrorStatus) 3 (copyS3Uri envAws sourceS3Uri targetS3Uri)
+    S3 targetS3Uri -> retryUnless ((== Just 301) . appErrorStatus) 3 (copyS3Uri envAws (reslashS3Uri sourceS3Uri) (reslashS3Uri targetS3Uri))
     Local _        -> throwError "Can't copy between different file backends"
     HttpUri _      -> throwError "Link and copy unsupported for http backend"
   Local sourcePath -> case target of
@@ -184,7 +197,7 @@ linkOrCopyResource envAws source target = case source of
 readHttpUri :: (MonadIO m, MonadCatch m) => Text -> m (Either AppError LBS.ByteString)
 readHttpUri httpUri = handleHttpError $ do
   manager <- liftIO $ HTTP.newManager HTTP.defaultManagerSettings
-  request <- liftIO $ HTTP.parseUrlThrow (T.unpack ("GET " <> httpUri))
+  request <- liftIO $ HTTP.parseUrlThrow (T.unpack ("GET " <> reslashHttpUri httpUri))
   response <- liftIO $ HTTP.httpLbs request manager
 
   return $ HTTP.responseBody response
@@ -192,7 +205,7 @@ readHttpUri httpUri = handleHttpError $ do
 headHttpUri :: (MonadIO m, MonadCatch m) => Text -> m (Either AppError LBS.ByteString)
 headHttpUri httpUri = handleHttpError $ do
   manager <- liftIO $ HTTP.newManager HTTP.defaultManagerSettings
-  request <- liftIO $ HTTP.parseUrlThrow (T.unpack ("HEAD " <> httpUri))
+  request <- liftIO $ HTTP.parseUrlThrow (T.unpack ("HEAD " <> (reslashHttpUri httpUri)))
   response <- liftIO $ HTTP.httpLbs request manager
 
   return $ HTTP.responseBody response
