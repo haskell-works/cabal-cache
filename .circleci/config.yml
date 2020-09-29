@@ -66,8 +66,7 @@ workflows:
                 name: Install GHC
                 command: |
                   brew update
-                  brew upgrade python@3
-                  brew install jq libsodium bc pkg-config shellcheck md5sha1sum
+                  brew install jq md5sha1sum
                   curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | \
                     BOOTSTRAP_HASKELL_NONINTERACTIVE=1 \
                     BOOTSTRAP_HASKELL_GHC_VERSION=8.8.3 \
