@@ -68,22 +68,20 @@ workflows:
                   brew update
                   brew upgrade python@3
                   brew install jq libsodium bc pkg-config shellcheck md5sha1sum
-                  curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | BOOTSTRAP_HASKELL_NONINTERACTIVE=1 sh
+                  curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | \
+                    BOOTSTRAP_HASKELL_NONINTERACTIVE=1 \
+                    BOOTSTRAP_HASKELL_GHC_VERSION=8.8.3 \
+                    BOOTSTRAP_HASKELL_CABAL_VERSION=3.2.0.0 \
+                    sh
                   cat >> $BASH_ENV \<<EOF
                   export PATH="$HOME/.ghcup/bin:$PATH"
                   EOF
                   source $BASH_ENV
-                  ghcup install 8.8.3
-                  ghcup set 8.8.3
             - save_cache:
                 key: homebrew-itself-cache
                 # I cache Homebrew itself, not the stuff that is installed with it
                 # because brew update takes up to 4 minutes for some reason.
                 paths: [/usr/local/Homebrew]
-
-          filters:
-            branches:
-              only: master
 
       - github/release-cabal:
           context: haskell-ci
