@@ -104,8 +104,8 @@ getPackages basePath planJson = forM packages (mkPackageInfo basePath compilerId
         packages :: [Z.Package]
         packages = planJson ^. the @"installPlan"
 
-loadPlan :: IO (Either AppError Z.PlanJson)
-loadPlan = (first fromString . eitherDecode) <$> LBS.readFile ("dist-newstyle" </> "cache" </> "plan.json")
+loadPlan :: FilePath -> IO (Either AppError Z.PlanJson)
+loadPlan buildPath = (first fromString . eitherDecode) <$> LBS.readFile (buildPath </> "cache" </> "plan.json")
 
 -------------------------------------------------------------------------------
 mkPackageInfo :: FilePath -> Z.CompilerId -> Z.Package -> IO PackageInfo

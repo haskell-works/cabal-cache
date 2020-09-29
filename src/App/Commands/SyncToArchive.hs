@@ -14,7 +14,6 @@ import Antiope.Env                      (mkEnv)
 import Antiope.Options.Applicative
 import App.Commands.Options.Parser      (text)
 import App.Commands.Options.Types       (SyncToArchiveOptions (SyncToArchiveOptions))
-import App.Static                       (cabalDirectory)
 import Control.Applicative
 import Control.Lens                     hiding ((<.>))
 import Control.Monad                    (filterM, unless, when)
@@ -33,6 +32,7 @@ import Options.Applicative              hiding (columns)
 import System.Directory                 (doesDirectoryExist)
 
 import qualified App.Commands.Options.Types         as Z
+import qualified App.Static                         as AS
 import qualified Control.Concurrent.STM             as STM
 import qualified Data.ByteString.Lazy               as LBS
 import qualified Data.ByteString.Lazy.Char8         as LC8
@@ -76,7 +76,8 @@ runSyncToArchive opts = do
 
   tEarlyExit <- STM.newTVarIO False
 
-  mbPlan <- Z.loadPlan
+  mbPlan <- Z.loadPlan $ opts ^. the @"buildPath"
+
   case mbPlan of
     Right planJson -> do
       compilerContextResult <- runExceptT $ Z.mkCompilerContext planJson
@@ -172,13 +173,19 @@ optsSyncToArchive = SyncToArchiveOptions
       (   long "archive-uri"
       <>  help "Archive URI to sync to"
       <>  metavar "S3_URI"
-      <>  value (Local $ cabalDirectory </> "archive")
+      <>  value (Local $ AS.cabalDirectory </> "archive")
+      )
+  <*> strOption
+      (   long "build-path"
+      <>  help ("Path to cabal build directory.  Defaults to " <> show AS.buildPath)
+      <>  metavar "DIRECTORY"
+      <>  value AS.buildPath
       )
   <*> strOption
       (   long "store-path"
       <>  help "Path to cabal store"
       <>  metavar "DIRECTORY"
-      <>  value (cabalDirectory </> "store")
+      <>  value (AS.cabalDirectory </> "store")
       )
   <*> optional
       ( strOption
