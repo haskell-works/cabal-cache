@@ -6,3 +6,6 @@ import qualified App.Static.Windows as W
 
 cabalDirectory :: FilePath
 cabalDirectory = if S.isPosix then P.cabalDirectory else W.cabalDirectory
+
+buildPath :: FilePath
+buildPath = "dist-newstyle"
