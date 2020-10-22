@@ -55,11 +55,12 @@ import qualified System.IO                                        as IO
 import qualified System.IO.Temp                                   as IO
 import qualified System.IO.Unsafe                                 as IO
 
-{- HLINT ignore "Redundant do"        -}
-{- HLINT ignore "Reduce duplication"  -}
+{- HLINT ignore "Monoid law, left identity" -}
+{- HLINT ignore "Reduce duplication"        -}
+{- HLINT ignore "Redundant do"              -}
 
 skippable :: Z.Package -> Bool
-skippable package = (package ^. the @"packageType" == "pre-existing")
+skippable package = package ^. the @"packageType" == "pre-existing"
 
 runSyncFromArchive :: Z.SyncFromArchiveOptions -> IO ()
 runSyncFromArchive opts = do

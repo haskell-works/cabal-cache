@@ -41,6 +41,8 @@ import qualified HaskellWorks.CabalCache.Types  as Z
 import qualified System.Directory               as IO
 import qualified System.Process                 as IO
 
+{- HLINT ignore "Monoid law, left identity" -}
+
 type PackageDir = FilePath
 type ConfPath   = FilePath
 type Library    = FilePath
@@ -104,7 +106,7 @@ getPackages basePath planJson = forM packages (mkPackageInfo basePath compilerId
         packages = planJson ^. the @"installPlan"
 
 loadPlan :: FilePath -> IO (Either AppError Z.PlanJson)
-loadPlan buildPath = (first fromString . eitherDecode) <$> LBS.readFile (buildPath </> "cache" </> "plan.json")
+loadPlan buildPath = first fromString . eitherDecode <$> LBS.readFile (buildPath </> "cache" </> "plan.json")
 
 -------------------------------------------------------------------------------
 mkPackageInfo :: FilePath -> Z.CompilerId -> Z.Package -> IO PackageInfo

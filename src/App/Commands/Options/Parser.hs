@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 module App.Commands.Options.Parser where
 
 import Antiope.Core               (FromText, fromText)
