@@ -5,6 +5,8 @@ import App.Commands.SyncToArchive
 import App.Commands.Version
 import Options.Applicative
 
+{- HLINT ignore "Monoid law, left identity" -}
+
 commands :: Parser (IO ())
 commands = commandsGeneral
 
