@@ -65,7 +65,6 @@ jobs:
           cabal build all --enable-tests --enable-benchmarks --write-ghc-environment-files=ghc8.4.4+ -j1
 
       - name: Test
-        # Try building it twice in case of flakey builds on Windows
         run: |
           cabal test all --enable-tests --enable-benchmarks --write-ghc-environment-files=ghc8.4.4+
 
@@ -93,33 +92,119 @@ jobs:
         run: |
           HS_BIN=$(find dist-newstyle \( -name 'cabal-cache' -o -name 'cabal-cache.exe' \) -type f | head -n 1)
           test -f "$HS_BIN"
-          NAME=cabal-cache-$GHC_VER
-          cp $HS_BIN $NAME${{env.EXE_EXT}}
-          if [[ "$OSTYPE" == "msys" ]]; then
-            7z a $NAME.zip $NAME${{env.EXE_EXT}}
-            echo ::set-output name=path::$NAME.zip
-            echo ::set-output name=content_type::application/zip
-            echo ::set-output name=extension::zip
-          else
-            strip $NAME
-            gzip --best $NAME
-            echo ::set-output name=path::$NAME.gz
-            echo ::set-output name=content_type::application/gzip
-            echo ::set-output name=extension::gz
-          fi
+          NAME="cabal-cache"
+
+          case ${{ matrix.os }} in
+            ubuntu-*)   os="linux"    ;;
+            macOS-*)    os="darwin"   ;;
+            windows-*)  os="windows"  ;;
+            *)          exit 1        ;; # error
+          esac
+          os_arch="$(uname -m)-$os"
+
+          cp "$HS_BIN" "$NAME${{env.EXE_EXT}}"
+          [ "$OS" != Windows_NT ] && strip "$NAME${{env.EXE_EXT}}"
+
+          mkdir -p artifacts
+
+          7z a "artifacts/$NAME-$os_arch.zip" "$NAME${{env.EXE_EXT}}"
+          echo "::set-output name=path_zip::$NAME.zip"
+
+          gzip -c --best "$NAME${{env.EXE_EXT}}" > artifacts/$NAME-$os_arch${{env.EXE_EXT}}.gz
+          echo "::set-output name=path_gzip::$NAME.gz"
+
+          tar zcvf "artifacts/$NAME-$os_arch.tar.gz" "$NAME${{env.EXE_EXT}}"
+          echo "::set-output name=path_targz::$NAME.targz"
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: cabal-cache-${{ runner.OS }}-${{ matrix.ghc }}
+          path: artifacts
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+
+    steps:
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          body: |
+            Changes in this Release
+            - First Change
+            - Second Change
+          draft: true
+          prerelease: false
+
+  publish:
+    needs: [build, release]
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ghc: ["8.8.4"]
+        os: [ubuntu-latest, macOS-latest, windows-latest]
+
+    steps:
+      - uses: actions/download-artifact@v2
+        id: download_artifact
+        with:
+          name: cabal-cache-${{ runner.OS }}-${{ matrix.ghc }}
+          path: artifacts
+
+      - name: URL
+        run: ls artifacts
+
+      - name: Compute axes
+        id: axes
+        run: |
+          case ${{ matrix.os }} in
+            ubuntu-*)   os="linux"    ;;
+            macOS-*)    os="darwin"   ;;
+            windows-*)  os="windows"  ;;
+            *)          exit 1        ;; # error
+          esac
+          arch_os="$(uname -m)-$os"
+          echo "::set-output name=os_arch::$os_arch"
+
+      - name: Set some window specific things
+        if: matrix.os == 'windows-latest'
+        run: echo '::set-env name=EXE_EXT::.exe'
 
       - name: Upload Release Binary
-        if: "github.event_name == 'release'"
         uses: actions/upload-release-asset@v1.0.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ${{ steps.compress_binary.outputs.path }}
-          asset_name: cabal-cache-${{ runner.OS }}-${{ matrix.ghc }}${{env.EXE_EXT}}.${{ steps.compress_binary.outputs.extension }}
-          asset_content_type: ${{ steps.compress_binary.outputs.content_type }}
+          upload_url: ${{ needs.release.outputs.upload_url }}
+          asset_path: artifacts/cabal-cache-${{ steps.axes.outputs.os_arch }}${{env.EXE_EXT}}.gz
+          asset_name: cabal-cache-${{ steps.axes.outputs.os_arch }}.gz
+          asset_content_type: application/gzip
 
-      - uses: actions/upload-artifact@v2
+      - name: Upload Release Binary
+        uses: actions/upload-release-asset@v1.0.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          name: cabal-cache-${{ runner.OS }}-${{ matrix.ghc }}${{env.EXE_EXT}}.${{ steps.compress_binary.outputs.extension }}
-          path: ${{ steps.compress_binary.outputs.path }}
+          upload_url: ${{ needs.release.outputs.upload_url }}
+          asset_path: artifacts/cabal-cache-${{ steps.axes.outputs.os_arch }}.tar.gz
+          asset_name: cabal-cache-${{ steps.axes.outputs.os_arch }}.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload Release Binary
+        uses: actions/upload-release-asset@v1.0.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.release.outputs.upload_url }}
+          asset_path: artifacts/cabal-cache-${{ steps.axes.outputs.os_arch }}.zip
+          asset_name: cabal-cache-${{ steps.axes.outputs.os_arch }}.zip
+          asset_content_type: application/zip
