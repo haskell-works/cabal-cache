@@ -139,11 +139,9 @@ jobs:
             cabal check
           done
 
-          echo ${{ github.ref }}
-
       - name: Tag new version
         id: tag
-        if: ${{ github.ref == 'ref/head/master' }}
+        if: ${{ github.ref == 'refs/heads/master' }}
         env:
           server: http://hackage.haskell.org
           username: ${{ secrets.HACKAGE_USER }}
@@ -155,12 +153,14 @@ jobs:
 
           git fetch --unshallow origin
 
-          if ! git rev-parse "v$package_version"; then
+          if git tag "v$package_version"; then
             echo "Tagging with new version "v$package_version""
 
-            git tag "v$package_version"
-            git push origin "v$package_version"
-            echo "::set-output name=tag::v$package_version"
+            if git push origin "v$package_version"; then
+              echo "Tagged with new version "v$package_version""
+
+              echo "::set-output name=tag::v$package_version"
+            fi
           fi
 
   release:
