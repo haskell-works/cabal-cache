@@ -1,7 +1,7 @@
 cabal-version:          2.2
 
 name:                   cabal-cache
-version:                1.0.2.1
+version:                1.0.2.2
 synopsis:               CI Assistant for Haskell projects
 description:            CI Assistant for Haskell projects.  Implements package caching.
 homepage:               https://github.com/haskell-works/cabal-cache
@@ -9,7 +9,7 @@ license:                BSD-3-Clause
 license-file:           LICENSE
 author:                 John Ky
 maintainer:             newhoggy@gmail.com
-copyright:              John Ky 2019
+copyright:              John Ky 2019-2020
 category:               Development
 extra-source-files:     CHANGELOG.md, README.md
 

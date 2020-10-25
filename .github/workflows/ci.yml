@@ -5,9 +5,10 @@ defaults:
     shell: bash
 
 on:
+  push:
+    branches:
+      - master
   pull_request:
-  release:
-    types: [created]
 
 jobs:
   build:
