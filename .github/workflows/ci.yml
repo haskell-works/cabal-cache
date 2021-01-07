@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - uses: actions/setup-haskell@v1
+      - uses: haskell/actions/setup@v1
         id: setup-haskell
         with:
           ghc-version: ${{ matrix.ghc }}
@@ -37,7 +37,7 @@ jobs:
 
       - name: Set some window specific things
         if: matrix.os == 'windows-latest'
-        run: echo '::set-env name=EXE_EXT::.exe'
+        run: echo 'EXE_EXT=.exe' >> $GITHUB_ENV
 
       - name: Configure project
         run: cabal configure --enable-tests --enable-benchmarks --write-ghc-environment-files=ghc8.4.4+
@@ -261,7 +261,7 @@ jobs:
 
       - name: Set some window specific things
         if: matrix.os == 'windows-latest'
-        run: echo '::set-env name=EXE_EXT::.exe'
+        run: echo 'EXE_EXT=.exe' >> $GITHUB_ENV
 
       - name: Upload Release Binary
         uses: actions/upload-release-asset@v1.0.2
