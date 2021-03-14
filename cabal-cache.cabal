@@ -106,6 +106,7 @@ library
       App.Commands
       App.Commands.Options.Parser
       App.Commands.Options.Types
+      App.Commands.Plan
       App.Commands.SyncFromArchive
       App.Commands.SyncToArchive
       App.Commands.Version

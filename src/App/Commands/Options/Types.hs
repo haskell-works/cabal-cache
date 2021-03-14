@@ -19,6 +19,13 @@ data SyncToArchiveOptions = SyncToArchiveOptions
   , awsLogLevel   :: Maybe AWS.LogLevel
   } deriving (Eq, Show, Generic)
 
+data PlanOptions = PlanOptions
+  { buildPath     :: FilePath
+  , storePath     :: FilePath
+  , storePathHash :: Maybe String
+  , outputFile    :: FilePath
+  } deriving (Eq, Show, Generic)
+
 data SyncFromArchiveOptions = SyncFromArchiveOptions
   { region        :: Region
   , archiveUris   :: [Location]
