@@ -132,8 +132,9 @@ runSyncFromArchive opts = do
                 let archiveFiles        = versionedArchiveUris & each %~ (</> T.pack archiveBaseName)
                 let scopedArchiveFiles  = scopedArchiveUris & each %~ (</> T.pack archiveBaseName)
                 let packageStorePath    = storePath </> Z.packageDir pInfo
+                let maybePackage        = M.lookup packageId planPackages
+
                 storeDirectoryExists <- doesDirectoryExist packageStorePath
-                let maybePackage = M.lookup packageId planPackages
 
                 case maybePackage of
                   Nothing -> do
