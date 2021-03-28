@@ -1,7 +1,7 @@
 module App.Commands where
 
-import App.Commands.SyncFromArchive
 import App.Commands.Plan
+import App.Commands.SyncFromArchive
 import App.Commands.SyncToArchive
 import App.Commands.Version
 import Options.Applicative

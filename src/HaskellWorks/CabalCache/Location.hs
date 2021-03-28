@@ -33,9 +33,9 @@ data Location
   deriving (Show, Eq, Generic)
 
 instance ToText Location where
-  toText (S3 uri)       = toText uri
-  toText (Local p)      = T.pack p
-  toText (HttpUri uri)  = uri
+  toText (S3 uri)      = toText uri
+  toText (Local p)     = T.pack p
+  toText (HttpUri uri) = uri
 
 instance IsPath Location Text where
   (S3      b) </> p = S3      (b </>          p)
@@ -63,11 +63,11 @@ instance IsPath S3Uri Text where
 
 toLocation :: Text -> Maybe Location
 toLocation txt = if
-  | T.isPrefixOf "s3://" txt'    -> either (const Nothing) (Just . S3) (fromText txt')
-  | T.isPrefixOf "file://" txt'  -> Just (Local (T.unpack txt'))
-  | T.isPrefixOf "http://" txt'  -> Just (HttpUri txt')
-  | T.isInfixOf  "://" txt'      -> Nothing
-  | otherwise                       -> Just (Local (T.unpack txt'))
+  | T.isPrefixOf "s3://" txt'   -> either (const Nothing) (Just . S3) (fromText txt')
+  | T.isPrefixOf "file://" txt' -> Just (Local (T.unpack txt'))
+  | T.isPrefixOf "http://" txt' -> Just (HttpUri txt')
+  | T.isInfixOf  "://" txt'     -> Nothing
+  | otherwise                   -> Just (Local (T.unpack txt'))
   where txt' = T.strip txt
 
 -------------------------------------------------------------------------------

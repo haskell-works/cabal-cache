@@ -35,8 +35,8 @@ import qualified App.Static                         as AS
 import qualified Control.Concurrent.STM             as STM
 import qualified Data.ByteString.Lazy               as LBS
 import qualified Data.ByteString.Lazy.Char8         as LC8
-import qualified Data.Text                          as Text
 import qualified Data.Text                          as T
+import qualified Data.Text                          as Text
 import qualified HaskellWorks.CabalCache.AWS.Env    as AWS
 import qualified HaskellWorks.CabalCache.Core       as Z
 import qualified HaskellWorks.CabalCache.GhcPkg     as GhcPkg

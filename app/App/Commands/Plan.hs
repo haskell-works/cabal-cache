@@ -24,13 +24,13 @@ import Options.Applicative              hiding (columns)
 import qualified App.Commands.Options.Types         as Z
 import qualified App.Static                         as AS
 import qualified Control.Concurrent.STM             as STM
+import qualified Data.Aeson                         as J
 import qualified Data.ByteString.Lazy               as LBS
 import qualified Data.Text                          as T
 import qualified HaskellWorks.CabalCache.Core       as Z
 import qualified HaskellWorks.CabalCache.Hash       as H
 import qualified HaskellWorks.CabalCache.IO.Console as CIO
 import qualified System.IO                          as IO
-import qualified Data.Aeson as J
 
 {- HLINT ignore "Monoid law, left identity" -}
 {- HLINT ignore "Redundant do"              -}

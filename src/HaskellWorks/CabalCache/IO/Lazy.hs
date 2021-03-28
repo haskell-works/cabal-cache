@@ -144,9 +144,9 @@ writeResource envAws loc lbs = ExceptT $ case loc of
 
 createLocalDirectoryIfMissing :: (MonadCatch m, MonadIO m) => Location -> m ()
 createLocalDirectoryIfMissing = \case
-  S3 _        -> return ()
-  Local path  -> liftIO $ IO.createDirectoryIfMissing True path
-  HttpUri _   -> return ()
+  S3 _       -> return ()
+  Local path -> liftIO $ IO.createDirectoryIfMissing True path
+  HttpUri _  -> return ()
 
 copyS3Uri :: (MonadUnliftIO m, MonadCatch m) => AWS.Env -> AWS.S3Uri -> AWS.S3Uri -> ExceptT AppError m ()
 copyS3Uri envAws source target = case (reslashS3Uri source, reslashS3Uri target) of

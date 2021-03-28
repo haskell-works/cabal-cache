@@ -64,6 +64,10 @@ steps:
       # Default: after_alias
       list_align: after_alias
 
+      list_align: with_module_name
+
+      pad_module_names: true
+
       # Long list align style takes effect when import is too long. This is
       # determined by 'columns' setting.
       #

@@ -10,16 +10,9 @@ module HaskellWorks.CabalCache.IO.Error
   ) where
 
 import Control.Monad.Except
-import Foreign.C.Error
-  (
-    getErrno
-  , Errno
-  )
+import Foreign.C.Error                  (Errno, getErrno)
 import HaskellWorks.CabalCache.AppError
-import System.IO.Error
-  (
-    catchIOError
-  )
+import System.IO.Error                  (catchIOError)
 
 import qualified HaskellWorks.CabalCache.IO.Console as CIO
 import qualified System.Exit                        as IO
