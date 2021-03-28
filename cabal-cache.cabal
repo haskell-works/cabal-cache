@@ -9,9 +9,9 @@ license:                BSD-3-Clause
 license-file:           LICENSE
 author:                 John Ky
 maintainer:             newhoggy@gmail.com
-copyright:              John Ky 2019-2020
+copyright:              John Ky 2019-2021
 category:               Development
-extra-source-files:     CHANGELOG.md, README.md
+extra-source-files:     README.md
 
 source-repository head
   type: git
@@ -61,109 +61,119 @@ common zlib                           { build-depends: zlib                     
 
 common config
   default-language:     Haskell2010
-  ghc-options:          -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates
+  ghc-options:          -Wall
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+                        -Wtabs
+                        -Wunused-packages
 
 library
-  import:   base, config
-          , aeson
-          , amazonka
-          , amazonka-core
-          , amazonka-s3
-          , antiope-core
-          , antiope-optparse-applicative
-          , antiope-s3
-          , bytestring
-          , conduit-extra
-          , cryptonite
-          , containers
-          , deepseq
-          , directory
-          , exceptions
-          , filepath
-          , generic-lens
-          , http-client
-          , http-types
-          , lens
-          , mtl
-          , optparse-applicative
-          , process
-          , relation
-          , resourcet
-          , selective
-          , stm
-          , stringsearch
-          , tar
-          , temporary
-          , text
-          , time
-          , topograph
-          , unliftio
-          , zlib
+  import:               base, config
+                      , aeson
+                      , amazonka
+                      , amazonka-core
+                      , amazonka-s3
+                      , antiope-core
+                      , antiope-s3
+                      , bytestring
+                      , containers
+                      , cryptonite
+                      , deepseq
+                      , directory
+                      , exceptions
+                      , filepath
+                      , generic-lens
+                      , http-client
+                      , http-types
+                      , lens
+                      , mtl
+                      , optparse-applicative
+                      , process
+                      , relation
+                      , resourcet
+                      , stm
+                      , text
+                      , topograph
   other-modules:        Paths_cabal_cache
   autogen-modules:      Paths_cabal_cache
   hs-source-dirs:       src
-  exposed-modules:
-      App.Commands
-      App.Commands.Options.Parser
-      App.Commands.Options.Types
-      App.Commands.Plan
-      App.Commands.SyncFromArchive
-      App.Commands.SyncToArchive
-      App.Commands.Version
-      App.Static
-      App.Static.Base
-      App.Static.Posix
-      App.Static.Windows
-      HaskellWorks.CabalCache.AppError
-      HaskellWorks.CabalCache.AWS.Env
-      HaskellWorks.CabalCache.Concurrent.DownloadQueue
-      HaskellWorks.CabalCache.Concurrent.Fork
-      HaskellWorks.CabalCache.Concurrent.Type
-      HaskellWorks.CabalCache.Core
-      HaskellWorks.CabalCache.Data.List
-      HaskellWorks.CabalCache.Error
-      HaskellWorks.CabalCache.GhcPkg
-      HaskellWorks.CabalCache.Hash
-      HaskellWorks.CabalCache.IO.Console
-      HaskellWorks.CabalCache.IO.Error
-      HaskellWorks.CabalCache.IO.File
-      HaskellWorks.CabalCache.IO.Lazy
-      HaskellWorks.CabalCache.IO.Tar
-      HaskellWorks.CabalCache.Location
-      HaskellWorks.CabalCache.Metadata
-      HaskellWorks.CabalCache.Options
-      HaskellWorks.CabalCache.Show
-      HaskellWorks.CabalCache.Text
-      HaskellWorks.CabalCache.Topology
-      HaskellWorks.CabalCache.Types
-      HaskellWorks.CabalCache.Version
+  exposed-modules:      HaskellWorks.CabalCache.AppError
+                        HaskellWorks.CabalCache.AWS.Env
+                        HaskellWorks.CabalCache.Concurrent.DownloadQueue
+                        HaskellWorks.CabalCache.Concurrent.Fork
+                        HaskellWorks.CabalCache.Concurrent.Type
+                        HaskellWorks.CabalCache.Core
+                        HaskellWorks.CabalCache.Data.List
+                        HaskellWorks.CabalCache.Error
+                        HaskellWorks.CabalCache.GhcPkg
+                        HaskellWorks.CabalCache.Hash
+                        HaskellWorks.CabalCache.IO.Console
+                        HaskellWorks.CabalCache.IO.Error
+                        HaskellWorks.CabalCache.IO.File
+                        HaskellWorks.CabalCache.IO.Lazy
+                        HaskellWorks.CabalCache.IO.Tar
+                        HaskellWorks.CabalCache.Location
+                        HaskellWorks.CabalCache.Metadata
+                        HaskellWorks.CabalCache.Options
+                        HaskellWorks.CabalCache.Show
+                        HaskellWorks.CabalCache.Text
+                        HaskellWorks.CabalCache.Topology
+                        HaskellWorks.CabalCache.Types
+                        HaskellWorks.CabalCache.Version
 
 executable cabal-cache
-  import:   base, config
-          , optparse-applicative
+  import:               base, config
+                      , aeson
+                      , amazonka-core
+                      , antiope-core
+                      , antiope-optparse-applicative
+                      , bytestring
+                      , containers
+                      , directory
+                      , exceptions
+                      , generic-lens
+                      , http-types
+                      , lens
+                      , mtl
+                      , optparse-applicative
+                      , resourcet
+                      , stm
+                      , stringsearch
+                      , temporary
+                      , text
+                      , unliftio
   build-depends:        cabal-cache
   main-is:              Main.hs
   hs-source-dirs:       app
+  other-modules:        App.Commands
+                        App.Commands.Options.Parser
+                        App.Commands.Options.Types
+                        App.Commands.Plan
+                        App.Commands.SyncFromArchive
+                        App.Commands.SyncToArchive
+                        App.Commands.Version
+                        App.Static
+                        App.Static.Base
+                        App.Static.Posix
+                        App.Static.Windows
+                        Paths_cabal_cache
+  autogen-modules:      Paths_cabal_cache
   ghc-options:          -threaded -rtsopts -with-rtsopts=-N
 
 test-suite cabal-cache-test
-  import:   base, config
-          , aeson
-          , antiope-core
-          , antiope-s3
-          , bytestring
-          , containers
-          , filepath
-          , generic-lens
-          , hedgehog
-          , hspec
-          , http-types
-          , hw-hedgehog
-          , hw-hspec-hedgehog
-          , lens
-          , raw-strings-qq
-          , relation
-          , text
+  import:               base, config
+                      , aeson
+                      , antiope-core
+                      , antiope-s3
+                      , bytestring
+                      , filepath
+                      , hedgehog
+                      , hspec
+                      , http-types
+                      , hw-hspec-hedgehog
+                      , lens
+                      , raw-strings-qq
+                      , text
 
   type:                 exitcode-stdio-1.0
   main-is:              Spec.hs
@@ -171,7 +181,6 @@ test-suite cabal-cache-test
   hs-source-dirs:       test
   ghc-options:          -threaded -rtsopts -with-rtsopts=-N
   build-tool-depends:   hspec-discover:hspec-discover
-  other-modules:
-      HaskellWorks.CabalCache.AwsSpec
-      HaskellWorks.CabalCache.LocationSpec
-      HaskellWorks.CabalCache.QuerySpec
+  other-modules:        HaskellWorks.CabalCache.AwsSpec
+                        HaskellWorks.CabalCache.LocationSpec
+                        HaskellWorks.CabalCache.QuerySpec
