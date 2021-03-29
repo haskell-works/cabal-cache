@@ -165,7 +165,7 @@ runSyncFromArchive opts = do
                             when confPathExists $ do
                               confContents <- liftIO $ LBS.readFile theConfPath
                               liftIO $ LBS.writeFile tempConfPath (replace (LBS.toStrict oldStorePath) (C8.pack storePath) confContents)
-                              liftIO $ catchErrno [eXDEV] (IO.renameFile tempConfPath theConfPath) (IO.copyFile tempConfPath theConfPath >> IO.removeFile tempConfPath)
+                              liftIO $ IO.copyFile tempConfPath theConfPath >> IO.removeFile tempConfPath
 
                             return True
               Nothing -> do
