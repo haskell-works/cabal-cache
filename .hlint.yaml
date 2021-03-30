@@ -9,6 +9,7 @@
 # Warnings currently triggered by your code
 - ignore: {name: "Unused LANGUAGE pragma"}
 - ignore: {name: "Move brackets to avoid $"}
+- ignore: {name: "Monoid law, left identity"}
 
 
 # Specify additional command line arguments
