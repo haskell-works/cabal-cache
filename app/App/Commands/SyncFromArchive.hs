@@ -20,9 +20,8 @@ import Control.Monad.Except
 import Data.ByteString.Lazy.Search      (replace)
 import Data.Generics.Product.Any        (the)
 import Data.Maybe
-import Foreign.C.Error                  (eXDEV)
 import HaskellWorks.CabalCache.AppError
-import HaskellWorks.CabalCache.IO.Error (catchErrno, exceptWarn, maybeToExcept)
+import HaskellWorks.CabalCache.IO.Error (exceptWarn, maybeToExcept)
 import HaskellWorks.CabalCache.Location (toLocation, (<.>), (</>))
 import HaskellWorks.CabalCache.Metadata (loadMetadata)
 import HaskellWorks.CabalCache.Show
