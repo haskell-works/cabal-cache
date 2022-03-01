@@ -5,6 +5,7 @@ module App.Commands.Options.Types where
 
 import Antiope.Env                      (Region)
 import GHC.Generics
+import Data.ByteString                  (ByteString)
 import HaskellWorks.CabalCache.Location
 
 import qualified Antiope.Env as AWS
@@ -17,6 +18,7 @@ data SyncToArchiveOptions = SyncToArchiveOptions
   , storePathHash :: Maybe String
   , threads       :: Int
   , awsLogLevel   :: Maybe AWS.LogLevel
+  , hostEndpoint  :: Maybe (ByteString, Int, Bool)
   } deriving (Eq, Show, Generic)
 
 data PlanOptions = PlanOptions
@@ -34,6 +36,7 @@ data SyncFromArchiveOptions = SyncFromArchiveOptions
   , storePathHash :: Maybe String
   , threads       :: Int
   , awsLogLevel   :: Maybe AWS.LogLevel
+  , hostEndpoint  :: Maybe (ByteString, Int, Bool)
   } deriving (Eq, Show, Generic)
 
 data VersionOptions = VersionOptions deriving (Eq, Show, Generic)
