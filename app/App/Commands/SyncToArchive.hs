@@ -18,9 +18,12 @@ import Control.Applicative
 import Control.Lens                     hiding ((<.>))
 import Control.Monad.Except
 import Control.Monad.Trans.Resource     (runResourceT)
+import Control.Monad.Trans.AWS          (envOverride, setEndpoint)
+import Data.ByteString                  (ByteString)
 import Data.Generics.Product.Any        (the)
 import Data.List                        ((\\))
 import Data.Maybe
+import Data.Monoid
 import HaskellWorks.CabalCache.AppError
 import HaskellWorks.CabalCache.Location (Location (..), toLocation, (<.>), (</>))
 import HaskellWorks.CabalCache.Metadata (createMetadata)
@@ -59,6 +62,7 @@ import qualified UnliftIO.Async                     as IO
 
 runSyncToArchive :: Z.SyncToArchiveOptions -> IO ()
 runSyncToArchive opts = do
+  let hostEndpoint        = opts ^. the @"hostEndpoint"
   let storePath           = opts ^. the @"storePath"
   let archiveUri          = opts ^. the @"archiveUri"
   let threads             = opts ^. the @"threads"
@@ -85,7 +89,10 @@ runSyncToArchive opts = do
       case compilerContextResult of
         Right compilerContext -> do
           let compilerId = planJson ^. the @"compilerId"
-          envAws <- IO.unsafeInterleaveIO $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
+          envAws <- IO.unsafeInterleaveIO $ (<&> envOverride .~ Dual (Endo $ \s -> case hostEndpoint of
+            Just (hostname, port, ssl) -> setEndpoint ssl hostname port s
+            Nothing -> s))
+            $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
           let archivePath       = versionedArchiveUri </> compilerId
           let scopedArchivePath = scopedArchiveUri </> compilerId
           IO.createLocalDirectoryIfMissing archivePath
@@ -207,6 +214,26 @@ optsSyncToArchive = SyncToArchiveOptions
         <>  metavar "AWS_LOG_LEVEL"
         )
       )
+  <*> optional parseEndpoint
+
+parseEndpoint :: Parser (ByteString, Int, Bool)
+parseEndpoint =
+  (,,)
+  <$>  option autoText
+        (   long "host-name-override"
+        <>  help "Override the host name (default: s3.amazonaws.com)"
+        <>  metavar "HOST_NAME"
+        )
+  <*> option auto
+        (   long "host-port-override"
+        <>  help "Override the host port"
+        <>  metavar "HOST_PORT"
+        )
+  <*> option auto
+        (   long "host-ssl-override"
+        <>  help "Override the host SSL"
+        <>  metavar "HOST_SSL"
+        )
 
 cmdSyncToArchive :: Mod CommandFields (IO ())
 cmdSyncToArchive = command "sync-to-archive"  $ flip info idm $ runSyncToArchive <$> optsSyncToArchive

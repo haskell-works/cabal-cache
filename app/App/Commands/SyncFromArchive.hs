@@ -17,6 +17,7 @@ import Control.Applicative
 import Control.Lens                     hiding ((<.>))
 import Control.Monad.Catch              (MonadCatch)
 import Control.Monad.Except
+import Data.ByteString                  (ByteString)
 import Data.ByteString.Lazy.Search      (replace)
 import Data.Generics.Product.Any        (the)
 import Data.Maybe
@@ -244,6 +245,26 @@ optsSyncFromArchive = SyncFromArchiveOptions
         <>  metavar "AWS_LOG_LEVEL"
         )
       )
+  <*> optional parseEndpoint
+
+parseEndpoint :: Parser (ByteString, Int, Bool)
+parseEndpoint =
+  (,,)
+  <$>  option autoText
+        (   long "host-name-override"
+        <>  help "Override the host name (default: s3.amazonaws.com)"
+        <>  metavar "HOST_NAME"
+        )
+  <*> option auto
+        (   long "host-port-override"
+        <>  help "Override the host port"
+        <>  metavar "HOST_PORT"
+        )
+  <*> option auto
+        (   long "host-ssl-override"
+        <>  help "Override the host SSL"
+        <>  metavar "HOST_SSL"
+        )
 
 cmdSyncFromArchive :: Mod CommandFields (IO ())
 cmdSyncFromArchive = command "sync-from-archive"  $ flip info idm $ runSyncFromArchive <$> optsSyncFromArchive

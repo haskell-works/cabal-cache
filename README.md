@@ -76,6 +76,14 @@ Run the following command to sync from archive directory.
 cabal-cache sync-from-archive --threads 16 --archive-uri archive --region Sydney
 ```
 
+### Multicloud
+
+To run against a different service, use something like:
+
+```bash
+cabal-cache sync-to-archive --threads 16 --archive-uri s3://my-cabal-cache-bucket/archive --host-name-override=s3.us-west.some-service.com --host-port-override=443 --host-ssl-override=True
+```
+
 ## The archive
 
 ### Archive tarball format

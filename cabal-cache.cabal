@@ -130,6 +130,7 @@ library
 executable cabal-cache
   import:               base, config
                       , aeson
+                      , amazonka
                       , amazonka-core
                       , antiope-core
                       , antiope-optparse-applicative
