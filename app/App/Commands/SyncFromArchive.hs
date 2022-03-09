@@ -17,10 +17,12 @@ import Control.Applicative
 import Control.Lens                     hiding ((<.>))
 import Control.Monad.Catch              (MonadCatch)
 import Control.Monad.Except
+import Control.Monad.Trans.AWS          (envOverride, setEndpoint)
 import Data.ByteString                  (ByteString)
 import Data.ByteString.Lazy.Search      (replace)
 import Data.Generics.Product.Any        (the)
 import Data.Maybe
+import Data.Monoid
 import HaskellWorks.CabalCache.AppError
 import HaskellWorks.CabalCache.IO.Error (exceptWarn, maybeToExcept)
 import HaskellWorks.CabalCache.Location (toLocation, (<.>), (</>))
@@ -64,6 +66,7 @@ skippable package = package ^. the @"packageType" == "pre-existing"
 
 runSyncFromArchive :: Z.SyncFromArchiveOptions -> IO ()
 runSyncFromArchive opts = do
+  let hostEndpoint          = opts ^. the @"hostEndpoint"
   let storePath             = opts ^. the @"storePath"
   let archiveUris           = opts ^. the @"archiveUris"
   let threads               = opts ^. the @"threads"
@@ -90,7 +93,10 @@ runSyncFromArchive opts = do
         Right compilerContext -> do
           GhcPkg.testAvailability compilerContext
 
-          envAws <- IO.unsafeInterleaveIO $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
+          envAws <- IO.unsafeInterleaveIO $ (<&> envOverride .~ Dual (Endo $ \s -> case hostEndpoint of
+            Just (hostname, port, ssl) -> setEndpoint ssl hostname port s
+            Nothing -> s))
+            $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
           let compilerId                  = planJson ^. the @"compilerId"
           let storeCompilerPath           = storePath </> T.unpack compilerId
           let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"
