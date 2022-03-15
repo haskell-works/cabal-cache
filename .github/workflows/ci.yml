@@ -113,39 +113,6 @@ jobs:
           name: cabal-cache-${{ runner.OS }}-${{ matrix.ghc }}
           path: artifacts
 
-      - name: Test save cabal cache
-        if: ${{ always() }}
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          BINARY_CACHE_REGION: ${{ secrets.BINARY_CACHE_REGION }}
-          BINARY_CACHE_THREADS: ${{ secrets.BINARY_CACHE_THREADS }}
-          BINARY_CACHE_URI: ${{ secrets.BINARY_CACHE_URI }}/cabal-cache-test
-        run: |
-          cabal exec -- cabal-cache sync-to-archive \
-            --threads       "$BINARY_CACHE_THREADS" \
-            --archive-uri   "$BINARY_CACHE_URI" \
-            --region        "$BINARY_CACHE_REGION" \
-            --store-path    "${{ steps.setup-haskell.outputs.cabal-store }}"
-
-          cabal exec -- cabal-cache sync-from-archive \
-            --threads       "$BINARY_CACHE_THREADS" \
-            --archive-uri   "$BINARY_CACHE_URI" \
-            --region        "$BINARY_CACHE_REGION" \
-            --store-path    fake-store-path
-    
-          # TODO Need to figure how to get this to work
-          # aws s3 rm --recursive "${BINARY_CACHE_URI}/cabal-cache-test"
-
-          file_count="$(find fake-store-path -type f  | wc -l)"
-
-          echo "Found $file_count files"
-
-          if [ $file_count -lt 1000 ]; then
-            echo "Save restore test failed.  Expected at lease 1000"
-            exit 1
-          fi
-
   check:
     needs: build
     runs-on: ubuntu-latest
