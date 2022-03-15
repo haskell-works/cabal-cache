@@ -38,6 +38,7 @@ common generic-lens                   { build-depends: generic-lens             
 common hedgehog                       { build-depends: hedgehog                       >= 1.0        && < 1.1    }
 common hspec                          { build-depends: hspec                          >= 2.4        && < 3      }
 common http-client                    { build-depends: http-client                    >= 0.5.14     && < 0.8    }
+common http-client-tls                { build-depends: http-client-tls                >= 0.3        && < 0.4    }
 common http-types                     { build-depends: http-types                     >= 0.12.3     && < 0.13   }
 common hw-hedgehog                    { build-depends: hw-hedgehog                    >= 0.1.0.3    && < 0.2    }
 common hw-hspec-hedgehog              { build-depends: hw-hspec-hedgehog              >= 0.1.0.4    && < 0.2    }
@@ -88,6 +89,7 @@ library
                       , filepath
                       , generic-lens
                       , http-client
+                      , http-client-tls
                       , http-types
                       , lens
                       , mtl

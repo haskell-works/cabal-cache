@@ -42,6 +42,7 @@ import qualified Network.AWS.S3.HeadObject          as AWS
 import qualified Network.AWS.S3.PutObject           as AWS
 import qualified Network.HTTP.Client                as HTTP
 import qualified Network.HTTP.Types                 as HTTP
+import qualified Network.HTTP.Client.TLS            as HTTPS
 import qualified System.Directory                   as IO
 import qualified System.FilePath.Posix              as FP
 import qualified System.IO                          as IO
@@ -84,9 +85,10 @@ readResource envAws = \case
       then Right <$> LBS.readFile path
       else pure (Left NotFound)
   Uri uri -> case uri ^. the @"uriScheme" of
-    "s3:"   -> getS3Uri envAws (reslashUri uri)
-    "http:" -> liftIO $ readHttpUri (reslashUri uri)
-    scheme  -> return (Left (GenericAppError ("Unrecognised uri scheme: " <> T.pack scheme)))
+    "s3:"     -> getS3Uri envAws (reslashUri uri)
+    "http:"   -> liftIO $ readHttpUri (reslashUri uri)
+    "https:"  -> liftIO $ readHttpUri (reslashUri uri)
+    scheme    -> return (Left (GenericAppError ("Unrecognised uri scheme: " <> T.pack scheme)))
 
 readFirstAvailableResource :: (MonadResource m, MonadCatch m) => AWS.Env -> [Location] -> m (Either AppError (LBS.ByteString, Location))
 readFirstAvailableResource _ [] = return (Left (GenericAppError "No resources specified in read"))
@@ -215,7 +217,7 @@ linkOrCopyResource envAws source target = case source of
 
 readHttpUri :: (MonadIO m, MonadCatch m) => URI -> m (Either AppError LBS.ByteString)
 readHttpUri httpUri = handleHttpError $ do
-  manager <- liftIO $ HTTP.newManager HTTP.defaultManagerSettings
+  manager <- liftIO $ HTTP.newManager HTTPS.tlsManagerSettings
   request <- liftIO $ HTTP.parseUrlThrow (T.unpack ("GET " <> tshow (reslashUri httpUri)))
   response <- liftIO $ HTTP.httpLbs request manager
 
