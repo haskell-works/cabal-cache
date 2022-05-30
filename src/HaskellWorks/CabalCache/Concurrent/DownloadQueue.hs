@@ -3,7 +3,8 @@
 {-# LANGUAGE RecordWildCards   #-}
 
 module HaskellWorks.CabalCache.Concurrent.DownloadQueue
-  ( createDownloadQueue
+  ( DownloadStatus(..)
+  , createDownloadQueue
   , anchor
   , runQueue
   ) where
@@ -16,6 +17,8 @@ import qualified Data.Map                                as M
 import qualified Data.Relation                           as R
 import qualified Data.Set                                as S
 import qualified HaskellWorks.CabalCache.Concurrent.Type as Z
+
+data DownloadStatus = DownloadSuccess | DownloadFailure deriving (Eq, Show)
 
 anchor :: Z.PackageId -> M.Map Z.ConsumerId Z.ProviderId -> M.Map Z.ConsumerId Z.ProviderId
 anchor root dependencies = M.union dependencies $ M.singleton root (mconcat (M.elems dependencies))
@@ -59,16 +62,16 @@ failDownload Z.DownloadQueue {..} packageId = do
   STM.writeTVar tUploading  $ S.delete packageId uploading
   STM.writeTVar tFailures   $ S.insert packageId failures
 
-runQueue :: MonadIO m => Z.DownloadQueue -> (Z.PackageId -> m Bool) -> m ()
-runQueue downloadQueue@Z.DownloadQueue {..} f = do
+runQueue :: MonadIO m => Z.DownloadQueue -> (Z.PackageId -> m DownloadStatus) -> m ()
+runQueue downloadQueue f = do
   maybePackageId <- liftIO $ STM.atomically $ takeReady downloadQueue
 
   case maybePackageId of
     Just packageId -> do
-      success <- f packageId
-      if success
-        then liftIO $ STM.atomically $ commit downloadQueue packageId
-        else liftIO $ STM.atomically $ failDownload downloadQueue packageId
+      downloadStatus <- f packageId
+      case downloadStatus of
+        DownloadSuccess -> liftIO $ STM.atomically $ commit downloadQueue packageId
+        DownloadFailure -> liftIO $ STM.atomically $ failDownload downloadQueue packageId
       runQueue downloadQueue f
 
     Nothing -> do
