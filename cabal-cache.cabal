@@ -139,7 +139,6 @@ executable cabal-cache
                       , bytestring
                       , containers
                       , directory
-                      , exceptions
                       , generic-lens
                       , http-types
                       , lens

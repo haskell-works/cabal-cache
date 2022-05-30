@@ -15,9 +15,9 @@ import App.Commands.Options.Parser      (text)
 import App.Commands.Options.Types       (SyncFromArchiveOptions (SyncFromArchiveOptions))
 import Control.Applicative
 import Control.Lens                     hiding ((<.>))
-import Control.Monad.Catch              (MonadCatch)
 import Control.Monad.Except
-import Control.Monad.Trans.AWS          (envOverride, setEndpoint)
+import Control.Monad.Trans.AWS          (envOverride, setEndpoint, AWST', Env)
+import Control.Monad.Trans.Resource     (ResourceT)
 import Data.ByteString                  (ByteString)
 import Data.ByteString.Lazy.Search      (replace)
 import Data.Generics.Product.Any        (the)
@@ -28,6 +28,7 @@ import HaskellWorks.CabalCache.IO.Error (exceptWarn, maybeToExcept)
 import HaskellWorks.CabalCache.Location (toLocation, (<.>), (</>))
 import HaskellWorks.CabalCache.Metadata (loadMetadata)
 import HaskellWorks.CabalCache.Show
+import HaskellWorks.CabalCache.Types    (PackageId)
 import HaskellWorks.CabalCache.Version  (archiveVersion)
 import Options.Applicative              hiding (columns)
 import System.Directory                 (createDirectoryIfMissing, doesDirectoryExist)
@@ -56,7 +57,6 @@ import qualified System.Directory                                 as IO
 import qualified System.IO                                        as IO
 import qualified System.IO.Temp                                   as IO
 import qualified System.IO.Unsafe                                 as IO
-import HaskellWorks.CabalCache.Concurrent.DownloadQueue (DownloadStatus(..))
 
 {- HLINT ignore "Monoid law, left identity" -}
 {- HLINT ignore "Reduce duplication"        -}
@@ -146,14 +146,14 @@ runSyncFromArchive opts = do
                 case maybePackage of
                   Nothing -> do
                     CIO.hPutStrLn IO.stderr $ "Warning: package not found" <> packageId
-                    return DownloadSuccess
+                    return DQ.DownloadSuccess
                   Just package -> if skippable package
                     then do
                       CIO.putStrLn $ "Skipping: " <> packageId
-                      return DownloadSuccess
+                      return DQ.DownloadSuccess
                     else if storeDirectoryExists
-                      then return DownloadSuccess
-                      else runResAws envAws $ onError (cleanupStorePath packageStorePath packageId) DownloadFailure $ do
+                      then return DQ.DownloadSuccess
+                      else runResAws envAws $ onError (cleanupStorePath packageStorePath packageId) DQ.DownloadFailure $ do
                         (existingArchiveFileContents, existingArchiveFile) <- ExceptT $ IO.readFirstAvailableResource envAws (foldMap L.tuple2ToList (L.zip archiveFiles scopedArchiveFiles))
                         CIO.putStrLn $ "Extracting: " <> toText existingArchiveFile
 
@@ -174,10 +174,10 @@ runSyncFromArchive opts = do
                               liftIO $ LBS.writeFile tempConfPath (replace (LBS.toStrict oldStorePath) (C8.pack storePath) confContents)
                               liftIO $ IO.copyFile tempConfPath theConfPath >> IO.removeFile tempConfPath
 
-                            return DownloadSuccess
+                            return DQ.DownloadSuccess
               Nothing -> do
                 CIO.hPutStrLn IO.stderr $ "Warning: Invalid package id: " <> packageId
-                return DownloadSuccess
+                return DQ.DownloadSuccess
 
           CIO.putStrLn "Recaching package database"
           GhcPkg.recache compilerContext storeCompilerPackageDbPath
@@ -191,13 +191,17 @@ runSyncFromArchive opts = do
 
   return ()
 
-cleanupStorePath :: (MonadIO m, MonadCatch m) => FilePath -> Z.PackageId -> AppError -> m ()
+cleanupStorePath :: FilePath -> PackageId -> AppError -> AWST' Env (ResourceT IO) ()
 cleanupStorePath packageStorePath packageId e = do
   CIO.hPutStrLn IO.stderr $ "Warning: Sync failure: " <> packageId <> ", reason: " <> displayAppError e
   pathExists <- liftIO $ IO.doesPathExist packageStorePath
   when pathExists $ void $ IO.removePathRecursive packageStorePath
 
-onError :: MonadIO m => (AppError -> m ()) -> a -> ExceptT AppError m a -> m a
+onError :: ()
+  => (AppError -> AWST' Env (ResourceT IO) ())
+  -> DQ.DownloadStatus
+  -> ExceptT AppError (AWST' Env (ResourceT IO)) DQ.DownloadStatus
+  -> AWST' Env (ResourceT IO) DQ.DownloadStatus
 onError h failureValue f = do
   result <- runExceptT $ catchError (exceptWarn f) handler
   case result of
