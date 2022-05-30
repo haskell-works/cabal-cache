@@ -56,6 +56,7 @@ import qualified System.Directory                                 as IO
 import qualified System.IO                                        as IO
 import qualified System.IO.Temp                                   as IO
 import qualified System.IO.Unsafe                                 as IO
+import HaskellWorks.CabalCache.Concurrent.DownloadQueue (DownloadStatus(..))
 
 {- HLINT ignore "Monoid law, left identity" -}
 {- HLINT ignore "Reduce duplication"        -}
@@ -145,14 +146,14 @@ runSyncFromArchive opts = do
                 case maybePackage of
                   Nothing -> do
                     CIO.hPutStrLn IO.stderr $ "Warning: package not found" <> packageId
-                    return True
+                    return DownloadSuccess
                   Just package -> if skippable package
                     then do
                       CIO.putStrLn $ "Skipping: " <> packageId
-                      return True
+                      return DownloadSuccess
                     else if storeDirectoryExists
-                      then return True
-                      else runResAws envAws $ onError (cleanupStorePath packageStorePath packageId) False $ do
+                      then return DownloadSuccess
+                      else runResAws envAws $ onError (cleanupStorePath packageStorePath packageId) DownloadFailure $ do
                         (existingArchiveFileContents, existingArchiveFile) <- ExceptT $ IO.readFirstAvailableResource envAws (foldMap L.tuple2ToList (L.zip archiveFiles scopedArchiveFiles))
                         CIO.putStrLn $ "Extracting: " <> toText existingArchiveFile
 
@@ -173,10 +174,10 @@ runSyncFromArchive opts = do
                               liftIO $ LBS.writeFile tempConfPath (replace (LBS.toStrict oldStorePath) (C8.pack storePath) confContents)
                               liftIO $ IO.copyFile tempConfPath theConfPath >> IO.removeFile tempConfPath
 
-                            return True
+                            return DownloadSuccess
               Nothing -> do
                 CIO.hPutStrLn IO.stderr $ "Warning: Invalid package id: " <> packageId
-                return True
+                return DownloadSuccess
 
           CIO.putStrLn "Recaching package database"
           GhcPkg.recache compilerContext storeCompilerPackageDbPath
