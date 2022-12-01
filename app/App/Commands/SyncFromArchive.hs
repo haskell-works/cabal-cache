@@ -84,7 +84,7 @@ runSyncFromArchive opts = do
   CIO.putStrLn $ "Threads: "          <> tshow threads
   CIO.putStrLn $ "AWS Log level: "    <> tshow awsLogLevel
 
-  mbPlan <- Z.loadPlan $ opts ^. the @"buildPath"
+  mbPlan <- Z.loadPlan $ opts ^. the @"path" </> opts ^. the @"buildPath"
 
   case mbPlan of
     Right planJson -> do
@@ -223,6 +223,12 @@ optsSyncFromArchive = SyncFromArchiveOptions
         <>  help "Archive URI to sync to"
         <>  metavar "S3_URI"
         )
+      )
+  <*> strOption
+      (   long "path"
+      <>  help "Path to cabal project directory.  Defaults to \".\""
+      <>  metavar "DIRECTORY"
+      <>  value AS.path
       )
   <*> strOption
       (   long "build-path"

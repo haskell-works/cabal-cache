@@ -80,7 +80,7 @@ runSyncToArchive opts = do
 
   tEarlyExit <- STM.newTVarIO False
 
-  mbPlan <- Z.loadPlan $ opts ^. the @"buildPath"
+  mbPlan <- Z.loadPlan $ opts ^. the @"path" </> opts ^. the @"buildPath"
 
   case mbPlan of
     Right planJson -> do
@@ -181,6 +181,12 @@ optsSyncToArchive = SyncToArchiveOptions
       <>  help "Archive URI to sync to"
       <>  metavar "S3_URI"
       <>  value (Local $ AS.cabalDirectory </> "archive")
+      )
+  <*> strOption
+      (   long "path"
+      <>  help "Path to cabal project directory.  Defaults to \".\""
+      <>  metavar "DIRECTORY"
+      <>  value AS.buildPath
       )
   <*> strOption
       (   long "build-path"

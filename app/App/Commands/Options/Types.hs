@@ -13,6 +13,7 @@ import qualified Antiope.Env as AWS
 data SyncToArchiveOptions = SyncToArchiveOptions
   { region        :: Region
   , archiveUri    :: Location
+  , path          :: FilePath
   , buildPath     :: FilePath
   , storePath     :: FilePath
   , storePathHash :: Maybe String
@@ -22,7 +23,8 @@ data SyncToArchiveOptions = SyncToArchiveOptions
   } deriving (Eq, Show, Generic)
 
 data PlanOptions = PlanOptions
-  { buildPath     :: FilePath
+  { path          :: FilePath
+  , buildPath     :: FilePath
   , storePath     :: FilePath
   , storePathHash :: Maybe String
   , outputFile    :: FilePath
@@ -31,6 +33,7 @@ data PlanOptions = PlanOptions
 data SyncFromArchiveOptions = SyncFromArchiveOptions
   { region        :: Region
   , archiveUris   :: [Location]
+  , path          :: FilePath
   , buildPath     :: FilePath
   , storePath     :: FilePath
   , storePathHash :: Maybe String
