@@ -64,8 +64,6 @@ jobs:
           store-path: ${{ steps.setup-haskell.outputs.cabal-store }}
           threads: 16
           archive-uri: https://cache.haskellworks.io/archive
-          skip: "${{ secrets.BINARY_CACHE_URI != '' }}"
-
 
       - name: Build
         # Try building it twice in case of flakey builds on Windows
