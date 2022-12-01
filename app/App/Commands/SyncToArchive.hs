@@ -186,7 +186,7 @@ optsSyncToArchive = SyncToArchiveOptions
       (   long "path"
       <>  help "Path to cabal project directory.  Defaults to \".\""
       <>  metavar "DIRECTORY"
-      <>  value AS.buildPath
+      <>  value AS.path
       )
   <*> strOption
       (   long "build-path"
