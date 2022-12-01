@@ -51,7 +51,7 @@ runPlan opts = do
 
   tEarlyExit <- STM.newTVarIO False
 
-  mbPlan <- Z.loadPlan $ opts ^. the @"buildPath"
+  mbPlan <- Z.loadPlan $ opts ^. the @"path" </> opts ^. the @"buildPath"
 
   case mbPlan of
     Right planJson -> do
@@ -78,6 +78,12 @@ runPlan opts = do
 optsPlan :: Parser PlanOptions
 optsPlan = PlanOptions
   <$> strOption
+      (   long "path"
+      <>  help "Path to cabal project.  Defaults to \".\""
+      <>  metavar "DIRECTORY"
+      <>  value AS.path
+      )
+  <*> strOption
       (   long "build-path"
       <>  help ("Path to cabal build directory.  Defaults to " <> show AS.buildPath)
       <>  metavar "DIRECTORY"
