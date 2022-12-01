@@ -19,9 +19,9 @@ Several installation methods are available.
 cabal new-install cabal-cache
 ```
 
-### Ubuntu binaries
+### Binaries
 
-Dowload Ubuntu binaries from https://github.com/haskell-works/cabal-cache/releases
+Dowload binaries from https://github.com/haskell-works/cabal-cache/releases
 
 ### Using Homebrew on Mac OS X
 
