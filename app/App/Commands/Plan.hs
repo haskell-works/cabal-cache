@@ -93,7 +93,7 @@ optsPlan = PlanOptions
       (   long "store-path"
       <>  help "Path to cabal store"
       <>  metavar "DIRECTORY"
-      <>  value (AS.cabalDirectory </> "store")
+      <>  value AS.cabalStoreDirectory
       )
   <*> optional
       ( strOption

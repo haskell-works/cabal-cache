@@ -32,6 +32,7 @@ import HaskellWorks.CabalCache.Topology (buildPlanData, canShare)
 import HaskellWorks.CabalCache.Version  (archiveVersion)
 import Options.Applicative              hiding (columns)
 import System.Directory                 (doesDirectoryExist)
+import System.FilePath                  (takeDirectory)
 
 import qualified App.Commands.Options.Types         as Z
 import qualified App.Static                         as AS
@@ -180,7 +181,7 @@ optsSyncToArchive = SyncToArchiveOptions
       (   long "archive-uri"
       <>  help "Archive URI to sync to"
       <>  metavar "S3_URI"
-      <>  value (Local $ AS.cabalDirectory </> "archive")
+      <>  value (Local $ takeDirectory AS.cabalStoreDirectory </> "archive")
       )
   <*> strOption
       (   long "path"
@@ -198,7 +199,7 @@ optsSyncToArchive = SyncToArchiveOptions
       (   long "store-path"
       <>  help "Path to cabal store"
       <>  metavar "DIRECTORY"
-      <>  value (AS.cabalDirectory </> "store")
+      <>  value AS.cabalStoreDirectory
       )
   <*> optional
       ( strOption

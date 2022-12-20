@@ -238,9 +238,9 @@ optsSyncFromArchive = SyncFromArchiveOptions
       )
   <*> strOption
       (   long "store-path"
-      <>  help ("Path to cabal store.  Defaults to " <> show AS.cabalDirectory)
+      <>  help ("Path to cabal store.  Defaults to " <> show AS.cabalStoreDirectory)
       <>  metavar "DIRECTORY"
-      <>  value (AS.cabalDirectory </> "store")
+      <>  value AS.cabalStoreDirectory
       )
   <*> optional
       ( strOption
