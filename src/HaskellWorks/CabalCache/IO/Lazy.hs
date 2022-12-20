@@ -47,6 +47,9 @@ import qualified System.Directory                   as IO
 import qualified System.FilePath.Posix              as FP
 import qualified System.IO                          as IO
 import qualified System.IO.Error                    as IO
+import System.Environment (lookupEnv)
+import Text.Read (readMaybe)
+import Data.Maybe (fromMaybe)
 
 {- HLINT ignore "Redundant do"        -}
 {- HLINT ignore "Reduce duplication"  -}
@@ -59,16 +62,16 @@ handleAwsError f = catch (Right <$> f) $ \(e :: AWS.Error) ->
     (AWS.ServiceError (AWS.ServiceError' _ s@(HTTP.Status 301 _) _ _ _ _)) -> return (Left (AwsAppError s))
     _                                                                      -> throwM e
 
-handleHttpError :: (MonadCatch m, MonadIO m) => m a -> m (Either AppError a)
-handleHttpError f = catch (Right <$> f) $ \(e :: HTTP.HttpException) ->
+handleHttpError :: (MonadCatch m, MonadIO m) => m a -> ExceptT AppError m a
+handleHttpError f = catch (lift f) $ \(e :: HTTP.HttpException) ->
   case e of
     (HTTP.HttpExceptionRequest _ e') -> case e' of
-      HTTP.StatusCodeException resp _ -> return (Left (HttpAppError (resp & HTTP.responseStatus)))
-      _                               -> return (Left (GenericAppError (tshow e')))
-    _                                 -> throwM e
+      HTTP.StatusCodeException resp _ -> throwE (HttpAppError (resp & HTTP.responseStatus))
+      _                               -> throwE (GenericAppError (tshow e'))
+    _                                 -> liftIO $ throwM e
 
-getS3Uri :: (MonadResource m, MonadCatch m) => AWS.Env -> URI -> m (Either AppError LBS.ByteString)
-getS3Uri envAws uri = runExceptT $ do
+getS3Uri :: (MonadResource m, MonadCatch m) => AWS.Env -> URI -> ExceptT AppError m LBS.ByteString
+getS3Uri envAws uri = do
   AWS.S3Uri b k <- except $ uriToS3Uri (reslashUri uri)
   ExceptT . handleAwsError $ runAws envAws $ AWS.unsafeDownload b k
 
@@ -84,11 +87,11 @@ readResource envAws = \case
     if fileExists
       then Right <$> LBS.readFile path
       else pure (Left NotFound)
-  Uri uri -> case uri ^. the @"uriScheme" of
+  Uri uri -> runExceptT $ retryS3 $ case uri ^. the @"uriScheme" of
     "s3:"     -> getS3Uri envAws (reslashUri uri)
-    "http:"   -> liftIO $ readHttpUri (reslashUri uri)
-    "https:"  -> liftIO $ readHttpUri (reslashUri uri)
-    scheme    -> return (Left (GenericAppError ("Unrecognised uri scheme: " <> T.pack scheme)))
+    "http:"   -> readHttpUri (reslashUri uri)
+    "https:"  -> readHttpUri (reslashUri uri)
+    scheme    -> throwE (GenericAppError ("Unrecognised uri scheme: " <> T.pack scheme))
 
 readFirstAvailableResource :: (MonadResource m, MonadCatch m) => AWS.Env -> [Location] -> m (Either AppError (LBS.ByteString, Location))
 readFirstAvailableResource _ [] = return (Left (GenericAppError "No resources specified in read"))
@@ -122,7 +125,7 @@ resourceExists envAws = \case
           else return False
   Uri uri       -> case uri ^. the @"uriScheme" of
     "s3:"   -> isRight <$> runResourceT (headS3Uri envAws (reslashUri uri))
-    "http:" -> isRight <$> headHttpUri (reslashUri uri)
+    "http:" -> isRight <$> runExceptT (headHttpUri (reslashUri uri))
     _scheme -> return False
 
 firstExistingResource :: (MonadUnliftIO m, MonadCatch m, MonadIO m) => AWS.Env -> [Location] -> m (Maybe Location)
@@ -138,8 +141,8 @@ headS3Uri envAws uri = runExceptT $ do
   AWS.S3Uri b k <- except $ uriToS3Uri (reslashUri uri)
   ExceptT . handleAwsError $ runAws envAws $ AWS.send $ AWS.headObject b k
 
-uploadToS3 :: (MonadUnliftIO m, MonadCatch m) => AWS.Env -> URI -> LBS.ByteString -> m (Either AppError ())
-uploadToS3 envAws uri lbs = runExceptT $ do
+uploadToS3 :: (MonadUnliftIO m, MonadCatch m) => AWS.Env -> URI -> LBS.ByteString -> ExceptT AppError m ()
+uploadToS3 envAws uri lbs = do
   AWS.S3Uri b k <- except $ uriToS3Uri (reslashUri uri)
   let req = AWS.toBody lbs
   let po  = AWS.putObject b k req
@@ -154,10 +157,10 @@ reslashUri uri = uri & the @"uriPath" %~ fmap reslashChar
 writeResource :: (MonadUnliftIO m, MonadCatch m) => AWS.Env -> Location -> LBS.ByteString -> ExceptT AppError m ()
 writeResource envAws loc lbs = ExceptT $ case loc of
   Local path -> liftIO (LBS.writeFile path lbs) >> return (Right ())
-  Uri uri       -> case uri ^. the @"uriScheme" of
+  Uri uri       -> runExceptT $ retryS3 $ case uri ^. the @"uriScheme" of
     "s3:"   -> uploadToS3 envAws (reslashUri uri) lbs
-    "http:" -> return (Left (GenericAppError "HTTP PUT method not supported"))
-    scheme  -> return (Left (GenericAppError ("Unrecognised uri scheme: " <> T.pack scheme)))
+    "http:" -> throwE (GenericAppError "HTTP PUT method not supported")
+    scheme  -> throwE (GenericAppError ("Unrecognised uri scheme: " <> T.pack scheme))
 
 createLocalDirectoryIfMissing :: (MonadCatch m, MonadIO m) => Location -> m ()
 createLocalDirectoryIfMissing = \case
@@ -184,21 +187,34 @@ copyS3Uri envAws source target = do
             return (Left RetriesFailedAppError)
       Left msg -> return (Left msg)
 
-retry :: (Show e, MonadIO m) => Int -> ExceptT e m () -> ExceptT e m ()
-retry = retryWhen (const True)
-
-retryWhen :: (Show e, MonadIO m) => (e -> Bool) -> Int -> ExceptT e m () -> ExceptT e m ()
+retryWhen :: (Show e, MonadIO m) => (e -> Bool) -> Int -> ExceptT e m a -> ExceptT e m a
 retryWhen p n f = catchError f $ \exception -> if n > 0
   then do
-    liftIO $ CIO.hPutStrLn IO.stderr $ "WARNING: " <> tshow exception <> " (retrying)"
-    liftIO $ IO.threadDelay 1000000
-    if (p exception )
-      then retry (n - 1) f
+    if (p exception)
+      then do
+        liftIO $ CIO.hPutStrLn IO.stderr $ "WARNING: " <> tshow exception <> " (retrying)"
+        liftIO $ IO.threadDelay 1000000
+        retryWhen p (n - 1) f
       else throwError exception
   else throwError exception
 
-retryUnless :: (Show e, MonadIO m) => (e -> Bool) -> Int -> ExceptT e m () -> ExceptT e m ()
+retryUnless :: (Show e, MonadIO m) => (e -> Bool) -> Int -> ExceptT e m a -> ExceptT e m a
 retryUnless p = retryWhen (not . p)
+
+retryS3 :: MonadIO m => ExceptT AppError m a -> ExceptT AppError m a
+retryS3 a = do
+  retries <- (fromMaybe 3 . join) <$> liftIO (lookupEnv "CABAL_CACHE_RETRY" >>= \s -> return (readMaybe @Int <$> s))
+  retryUnless (\appe -> case appErrorStatus appe of
+                Just 402 -> False
+                Just 408 -> False
+                Just 410 -> False
+                Just 425 -> False
+                Just 429 -> False
+                Just i
+                  | i >= 500
+                  , i < 600 -> False
+                Just _   -> True
+                Nothing  -> True) retries a
 
 linkOrCopyResource :: (MonadUnliftIO m, MonadCatch m) => AWS.Env -> Location -> Location -> ExceptT AppError m ()
 linkOrCopyResource envAws source target = case source of
@@ -215,7 +231,7 @@ linkOrCopyResource envAws source target = case source of
       ("http:", "http:")           -> throwError "Link and copy unsupported for http backend"
       (sourceScheme, targetScheme) -> throwError $ GenericAppError $ "Unsupported backend combination: " <> T.pack sourceScheme <> " to " <> T.pack targetScheme
 
-readHttpUri :: (MonadIO m, MonadCatch m) => URI -> m (Either AppError LBS.ByteString)
+readHttpUri :: (MonadIO m, MonadCatch m) => URI -> ExceptT AppError m LBS.ByteString
 readHttpUri httpUri = handleHttpError $ do
   manager <- liftIO $ HTTP.newManager HTTPS.tlsManagerSettings
   request <- liftIO $ HTTP.parseUrlThrow (T.unpack ("GET " <> tshow (reslashUri httpUri)))
@@ -223,7 +239,7 @@ readHttpUri httpUri = handleHttpError $ do
 
   return $ HTTP.responseBody response
 
-headHttpUri :: (MonadIO m, MonadCatch m) => URI -> m (Either AppError LBS.ByteString)
+headHttpUri :: (MonadIO m, MonadCatch m) => URI -> ExceptT AppError m LBS.ByteString
 headHttpUri httpUri = handleHttpError $ do
   manager <- liftIO $ HTTP.newManager HTTP.defaultManagerSettings
   request <- liftIO $ HTTP.parseUrlThrow (T.unpack ("HEAD " <> tshow (reslashUri httpUri)))
