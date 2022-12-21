@@ -9,16 +9,18 @@ module HaskellWorks.CabalCache.Concurrent.DownloadQueue
   , runQueue
   ) where
 
-import Control.Monad.Catch    (MonadMask(..))
-import Control.Monad.IO.Class (MonadIO(..))
-import Data.Function          ((&))
-import Data.Set               ((\\))
+import Control.Monad.Catch          (MonadMask(..))
+import Control.Monad.IO.Class       (MonadIO(..))
+import Data.Function                ((&))
+import Data.Set                     ((\\))
+import HaskellWorks.CabalCache.Show (tshow)
 
 import qualified Control.Concurrent.STM                  as STM
 import qualified Control.Monad.Catch                     as CMC
 import qualified Data.Relation                           as R
 import qualified Data.Set                                as S
 import qualified HaskellWorks.CabalCache.Concurrent.Type as Z
+import qualified HaskellWorks.CabalCache.IO.Console      as CIO
 import qualified System.IO                               as IO
 
 data DownloadStatus = DownloadSuccess | DownloadFailure deriving (Eq, Show)
@@ -69,13 +71,17 @@ runQueue downloadQueue f = do
   case maybePackageId of
     Just packageId -> do
       downloadStatus <- f packageId
-        & CMC.handleAll \e -> do
-            liftIO $ IO.hPutStrLn IO.stderr $ "Exception during download: " <> show e
-            liftIO $ IO.hFlush IO.stderr
-            CMC.throwM e
+        & do CMC.handleAll \e -> do
+              liftIO $ CIO.hPutStrLn IO.stderr $ "Warning: Unexpected exception during download of " <> packageId <> ": " <> tshow e
+              liftIO $ IO.hFlush IO.stderr
+              pure DownloadFailure
       case downloadStatus of
-        DownloadSuccess -> do liftIO $ STM.atomically $ commit downloadQueue packageId
-        DownloadFailure -> do liftIO $ STM.atomically $ failDownload downloadQueue packageId
+        DownloadSuccess -> do
+          liftIO $ CIO.hPutStrLn IO.stderr $ "Downloaded " <> packageId
+          liftIO $ STM.atomically $ commit downloadQueue packageId
+        DownloadFailure -> do
+          liftIO $ CIO.hPutStrLn IO.stderr $ "Failed to download " <> packageId
+          liftIO $ STM.atomically $ failDownload downloadQueue packageId
       runQueue downloadQueue f
 
     Nothing -> return ()
