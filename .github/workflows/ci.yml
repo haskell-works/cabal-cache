@@ -20,7 +20,10 @@ jobs:
       fail-fast: false
       matrix:
         ghc: ["8.10.7", "8.8.4", "8.6.5"]
-        os: [ubuntu-latest, macOS-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest]
+        include:
+          - ghc: "8.10.7"
+            os: macOS-latest
 
     steps:
       - uses: actions/checkout@v2
@@ -29,20 +32,16 @@ jobs:
         id: setup-haskell
         with:
           ghc-version: ${{ matrix.ghc }}
-
-      - uses: actions/cache@v2
-        name: Cache cabal store
-        with:
-          path: dist-newstyle
-          key: cache-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('cabal-cache.cabal') }}-${{ github.sha }}
-          restore-keys: cache-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('cabal-cache.cabal') }}-
+          cabal-version: 3.8.1.0
 
       - name: Set some window specific things
         if: matrix.os == 'windows-latest'
         run: echo 'EXE_EXT=.exe' >> $GITHUB_ENV
 
       - name: Configure project
-        run: cabal configure --enable-tests --enable-benchmarks --write-ghc-environment-files=ghc8.4.4+
+        run: |
+          cabal configure --enable-tests --enable-benchmarks --write-ghc-environment-files=ghc8.4.4+
+          cabal build all --dry-run
 
       - name: Cabal cache over S3
         uses: action-works/cabal-cache-s3@v1
@@ -228,7 +227,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["8.8.4"]
+        ghc: ["8.10.7"]
         os: [ubuntu-latest, macOS-latest, windows-latest]
 
     steps:
