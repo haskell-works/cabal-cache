@@ -40,6 +40,7 @@ import qualified HaskellWorks.CabalCache.IO.Tar as IO
 import qualified HaskellWorks.CabalCache.Types  as Z
 import qualified System.Directory               as IO
 import qualified System.Process                 as IO
+import qualified System.Info                    as I
 
 {- HLINT ignore "Monoid law, left identity" -}
 
@@ -65,6 +66,22 @@ data PackageInfo = PackageInfo
 (<||>) :: Monad m => ExceptT e m a -> ExceptT e m a -> ExceptT e m a
 (<||>) f g = f `catchError` const g
 
+
+isPosix :: Bool
+isPosix = I.os /= "mingw32"
+{-# NOINLINE isPosix #-}
+
+exeExt :: String
+exeExt
+  | isPosix = ""
+  | otherwise = ".exe"
+
+withExeExt :: FilePath -> FilePath
+withExeExt = (<.> exeExt)
+
+withExeExt' :: Text -> Text
+withExeExt' = T.pack . withExeExt . T.unpack
+
 findExecutable :: MonadIO m => Text -> ExceptT Text m Text
 findExecutable exe = fmap T.pack $
   liftIO (IO.findExecutable (T.unpack exe)) >>= nothingToError (exe <> " is not in path")
@@ -85,8 +102,8 @@ mkCompilerContext plan = do
   compilerVersion <- T.stripPrefix "ghc-" (plan ^. the @"compilerId") & nothingToError "No compiler version available in plan"
   let versionedGhcPkgCmd = "ghc-pkg-" <> compilerVersion
   ghcPkgCmdPath <-
-          (findExecutable versionedGhcPkgCmd  >>= verifyGhcPkgVersion compilerVersion)
-    <||>  (findExecutable "ghc-pkg"           >>= verifyGhcPkgVersion compilerVersion)
+          (findExecutable (withExeExt' versionedGhcPkgCmd)  >>= verifyGhcPkgVersion compilerVersion)
+    <||>  (findExecutable (withExeExt' "ghc-pkg"         )  >>= verifyGhcPkgVersion compilerVersion)
   return (Z.CompilerContext [T.unpack ghcPkgCmdPath])
 
 relativePaths :: FilePath -> PackageInfo -> [IO.TarGroup]
