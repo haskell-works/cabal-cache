@@ -26,10 +26,13 @@ import Control.Monad.Trans.Except
 import Control.Monad.Trans.Resource
 import Data.Either                      (isRight)
 import Data.Generics.Product.Any
+import Data.Maybe                       (fromMaybe)
 import HaskellWorks.CabalCache.AppError
 import HaskellWorks.CabalCache.Location (Location (..))
 import HaskellWorks.CabalCache.Show
 import Network.URI                      (URI)
+import System.Environment               (lookupEnv)
+import Text.Read                        (readMaybe)
 
 import qualified Antiope.S3.Lazy                    as AWS
 import qualified Control.Concurrent                 as IO
