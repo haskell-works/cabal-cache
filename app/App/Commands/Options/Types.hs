@@ -20,6 +20,7 @@ data SyncToArchiveOptions = SyncToArchiveOptions
   , threads       :: Int
   , awsLogLevel   :: Maybe AWS.LogLevel
   , hostEndpoint  :: Maybe (ByteString, Int, Bool)
+  , maxRetries    :: Int
   } deriving (Eq, Show, Generic)
 
 data PlanOptions = PlanOptions
@@ -40,6 +41,7 @@ data SyncFromArchiveOptions = SyncFromArchiveOptions
   , threads       :: Int
   , awsLogLevel   :: Maybe AWS.LogLevel
   , hostEndpoint  :: Maybe (ByteString, Int, Bool)
+  , maxRetries    :: Int
   } deriving (Eq, Show, Generic)
 
 data VersionOptions = VersionOptions deriving (Eq, Show, Generic)

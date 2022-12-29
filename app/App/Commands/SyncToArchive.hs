@@ -71,6 +71,7 @@ runSyncToArchive opts = do
   let versionedArchiveUri = archiveUri </> archiveVersion
   let storePathHash       = opts ^. the @"storePathHash" & fromMaybe (H.hashStorePath storePath)
   let scopedArchiveUri    = versionedArchiveUri </> T.pack storePathHash
+  let maxRetries          = opts ^. the @"maxRetries"
 
   CIO.putStrLn $ "Store path: "       <> toText storePath
   CIO.putStrLn $ "Store path hash: "  <> T.pack storePathHash
@@ -146,7 +147,7 @@ runSyncToArchive opts = do
 
                     IO.createTar tempArchiveFile (rp2 <> [metas])
 
-                    void $ catchError (liftIO (LBS.readFile tempArchiveFile) >>= IO.writeResource envAws targetFile) $ \case
+                    void $ catchError (liftIO (LBS.readFile tempArchiveFile) >>= IO.writeResource envAws targetFile maxRetries) $ \case
                       e@(AwsAppError (HTTP.Status 301 _)) -> do
                         liftIO $ STM.atomically $ STM.writeTVar tEarlyExit True
                         CIO.hPutStrLn IO.stderr $ mempty
@@ -222,6 +223,12 @@ optsSyncToArchive = SyncToArchiveOptions
         )
       )
   <*> optional parseEndpoint
+  <*> option auto
+      (   long "max-retries"
+      <>  help "Max retries for S3 requests"
+      <>  metavar "NUM_RETRIES"
+      <>  value 3
+      )
 
 parseEndpoint :: Parser (ByteString, Int, Bool)
 parseEndpoint =
