@@ -58,8 +58,9 @@ import Data.Maybe (fromMaybe)
 handleAwsError :: MonadCatch m => m a -> m (Either AppError a)
 handleAwsError f = catch (Right <$> f) $ \(e :: AWS.Error) ->
   case e of
-    (AWS.ServiceError (AWS.ServiceError' _ s@(HTTP.Status 404 _) _ _ _ _)) -> return (Left (AwsAppError s))
     (AWS.ServiceError (AWS.ServiceError' _ s@(HTTP.Status 301 _) _ _ _ _)) -> return (Left (AwsAppError s))
+    (AWS.ServiceError (AWS.ServiceError' _ s@(HTTP.Status i _) _ _ _ _))
+      | i `elem` retryableHTTPStatuses -> return (Left (AwsAppError s))
     _                                                                      -> throwM e
 
 handleHttpError :: (MonadCatch m, MonadIO m) => m a -> ExceptT AppError m a
@@ -203,18 +204,19 @@ retryUnless p = retryWhen (not . p)
 
 retryS3 :: MonadIO m => ExceptT AppError m a -> ExceptT AppError m a
 retryS3 a = do
-  retries <- (fromMaybe 3 . join) <$> liftIO (lookupEnv "CABAL_CACHE_RETRY" >>= \s -> return (readMaybe @Int <$> s))
-  retryUnless (\appe -> case appErrorStatus appe of
-                Just 402 -> False
-                Just 408 -> False
-                Just 410 -> False
-                Just 425 -> False
-                Just 429 -> False
-                Just i
-                  | i >= 500
-                  , i < 600 -> False
-                Just _   -> True
-                Nothing  -> True) retries a
+  retries <- (fromMaybe 3 . join)
+          <$> liftIO (lookupEnv "CABAL_CACHE_RETRY" >>= \s -> return (readMaybe @Int <$> s))
+  -- https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html#ErrorCodeList
+  -- https://stackoverflow.com/a/51770411/2976251
+  -- another note: linode rate limiting returns 503
+  retryWhen retryPredicate retries a
+ where
+  retryPredicate appe = case appErrorStatus appe of
+                          Just i   -> i `elem` retryableHTTPStatuses
+                          Nothing  -> False
+
+retryableHTTPStatuses :: [Int]
+retryableHTTPStatuses = [408, 409, 425, 426, 502, 503, 504]
 
 linkOrCopyResource :: (MonadUnliftIO m, MonadCatch m) => AWS.Env -> Location -> Location -> ExceptT AppError m ()
 linkOrCopyResource envAws source target = case source of
