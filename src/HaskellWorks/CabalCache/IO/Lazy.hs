@@ -47,9 +47,6 @@ import qualified System.Directory                   as IO
 import qualified System.FilePath.Posix              as FP
 import qualified System.IO                          as IO
 import qualified System.IO.Error                    as IO
-import System.Environment (lookupEnv)
-import Text.Read (readMaybe)
-import Data.Maybe (fromMaybe)
 
 {- HLINT ignore "Redundant do"        -}
 {- HLINT ignore "Reduce duplication"  -}
@@ -58,8 +55,9 @@ import Data.Maybe (fromMaybe)
 handleAwsError :: MonadCatch m => m a -> m (Either AppError a)
 handleAwsError f = catch (Right <$> f) $ \(e :: AWS.Error) ->
   case e of
-    (AWS.ServiceError (AWS.ServiceError' _ s@(HTTP.Status 404 _) _ _ _ _)) -> return (Left (AwsAppError s))
     (AWS.ServiceError (AWS.ServiceError' _ s@(HTTP.Status 301 _) _ _ _ _)) -> return (Left (AwsAppError s))
+    (AWS.ServiceError (AWS.ServiceError' _ s@(HTTP.Status i _) _ _ _ _))
+      | i `elem` retryableHTTPStatuses -> return (Left (AwsAppError s))
     _                                                                      -> throwM e
 
 handleHttpError :: (MonadCatch m, MonadIO m) => m a -> ExceptT AppError m a
@@ -80,28 +78,28 @@ uriToS3Uri uri = case fromText @S3Uri (tshow uri) of
   Right s3Uri -> Right s3Uri
   Left msg    -> Left . GenericAppError $ "Unable to parse URI" <> tshow msg
 
-readResource :: (MonadResource m, MonadCatch m) => AWS.Env -> Location -> m (Either AppError LBS.ByteString)
-readResource envAws = \case
+readResource :: (MonadResource m, MonadCatch m) => AWS.Env -> Int -> Location -> m (Either AppError LBS.ByteString)
+readResource envAws maxRetries = \case
   Local path -> liftIO $ do
     fileExists <- IO.doesFileExist path
     if fileExists
       then Right <$> LBS.readFile path
       else pure (Left NotFound)
-  Uri uri -> runExceptT $ retryS3 $ case uri ^. the @"uriScheme" of
+  Uri uri -> runExceptT $ retryS3 maxRetries $ case uri ^. the @"uriScheme" of
     "s3:"     -> getS3Uri envAws (reslashUri uri)
     "http:"   -> readHttpUri (reslashUri uri)
     "https:"  -> readHttpUri (reslashUri uri)
     scheme    -> throwE (GenericAppError ("Unrecognised uri scheme: " <> T.pack scheme))
 
-readFirstAvailableResource :: (MonadResource m, MonadCatch m) => AWS.Env -> [Location] -> m (Either AppError (LBS.ByteString, Location))
-readFirstAvailableResource _ [] = return (Left (GenericAppError "No resources specified in read"))
-readFirstAvailableResource envAws (a:as) = do
-  result <- readResource envAws a
+readFirstAvailableResource :: (MonadResource m, MonadCatch m) => AWS.Env -> [Location] -> Int -> m (Either AppError (LBS.ByteString, Location))
+readFirstAvailableResource _ [] _ = return (Left (GenericAppError "No resources specified in read"))
+readFirstAvailableResource envAws (a:as) maxRetries = do
+  result <- readResource envAws maxRetries a
   case result of
     Right lbs -> return $ Right (lbs, a)
     Left e -> if null as
       then return $ Left e
-      else readFirstAvailableResource envAws as
+      else readFirstAvailableResource envAws as maxRetries
 
 safePathIsSymbolLink :: FilePath -> IO Bool
 safePathIsSymbolLink filePath = catch (IO.pathIsSymbolicLink filePath) handler
@@ -154,10 +152,10 @@ reslashUri uri = uri & the @"uriPath" %~ fmap reslashChar
         reslashChar '\\' = '/'
         reslashChar c    = c
 
-writeResource :: (MonadUnliftIO m, MonadCatch m) => AWS.Env -> Location -> LBS.ByteString -> ExceptT AppError m ()
-writeResource envAws loc lbs = ExceptT $ case loc of
+writeResource :: (MonadUnliftIO m, MonadCatch m) => AWS.Env -> Location -> Int -> LBS.ByteString -> ExceptT AppError m ()
+writeResource envAws loc maxRetries lbs = ExceptT $ case loc of
   Local path -> liftIO (LBS.writeFile path lbs) >> return (Right ())
-  Uri uri       -> runExceptT $ retryS3 $ case uri ^. the @"uriScheme" of
+  Uri uri       -> runExceptT $ retryS3 maxRetries $ case uri ^. the @"uriScheme" of
     "s3:"   -> uploadToS3 envAws (reslashUri uri) lbs
     "http:" -> throwE (GenericAppError "HTTP PUT method not supported")
     scheme  -> throwE (GenericAppError ("Unrecognised uri scheme: " <> T.pack scheme))
@@ -201,20 +199,19 @@ retryWhen p n f = catchError f $ \exception -> if n > 0
 retryUnless :: (Show e, MonadIO m) => (e -> Bool) -> Int -> ExceptT e m a -> ExceptT e m a
 retryUnless p = retryWhen (not . p)
 
-retryS3 :: MonadIO m => ExceptT AppError m a -> ExceptT AppError m a
-retryS3 a = do
-  retries <- (fromMaybe 3 . join) <$> liftIO (lookupEnv "CABAL_CACHE_RETRY" >>= \s -> return (readMaybe @Int <$> s))
-  retryUnless (\appe -> case appErrorStatus appe of
-                Just 402 -> False
-                Just 408 -> False
-                Just 410 -> False
-                Just 425 -> False
-                Just 429 -> False
-                Just i
-                  | i >= 500
-                  , i < 600 -> False
-                Just _   -> True
-                Nothing  -> True) retries a
+retryS3 :: MonadIO m => Int -> ExceptT AppError m a -> ExceptT AppError m a
+retryS3 maxRetries a = do
+  retryWhen retryPredicate maxRetries a
+ where
+  retryPredicate appe = case appErrorStatus appe of
+                          Just i   -> i `elem` retryableHTTPStatuses
+                          Nothing  -> False
+
+  -- https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html#ErrorCodeList
+  -- https://stackoverflow.com/a/51770411/2976251
+  -- another note: linode rate limiting returns 503
+retryableHTTPStatuses :: [Int]
+retryableHTTPStatuses = [408, 409, 425, 426, 502, 503, 504]
 
 linkOrCopyResource :: (MonadUnliftIO m, MonadCatch m) => AWS.Env -> Location -> Location -> ExceptT AppError m ()
 linkOrCopyResource envAws source target = case source of

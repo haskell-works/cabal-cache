@@ -75,6 +75,7 @@ runSyncFromArchive opts = do
   let versionedArchiveUris  = archiveUris & each %~ (</> archiveVersion)
   let storePathHash         = opts ^. the @"storePathHash" & fromMaybe (H.hashStorePath storePath)
   let scopedArchiveUris     = versionedArchiveUris & each %~ (</> T.pack storePathHash)
+  let maxRetries            = opts ^. the @"maxRetries"
 
   CIO.putStrLn $ "Store path: "       <> toText storePath
   CIO.putStrLn $ "Store path hash: "  <> T.pack storePathHash
@@ -154,7 +155,7 @@ runSyncFromArchive opts = do
                     else if storeDirectoryExists
                       then return DQ.DownloadSuccess
                       else runResAws envAws $ onError (cleanupStorePath packageStorePath packageId) DQ.DownloadFailure $ do
-                        (existingArchiveFileContents, existingArchiveFile) <- ExceptT $ IO.readFirstAvailableResource envAws (foldMap L.tuple2ToList (L.zip archiveFiles scopedArchiveFiles))
+                        (existingArchiveFileContents, existingArchiveFile) <- ExceptT $ IO.readFirstAvailableResource envAws (foldMap L.tuple2ToList (L.zip archiveFiles scopedArchiveFiles)) maxRetries
                         CIO.putStrLn $ "Extracting: " <> toText existingArchiveFile
 
                         let tempArchiveFile = tempPath </> archiveBaseName
@@ -263,6 +264,12 @@ optsSyncFromArchive = SyncFromArchiveOptions
         )
       )
   <*> optional parseEndpoint
+  <*> option auto
+      (   long "max-retries"
+      <>  help "Max retries for S3 requests"
+      <>  metavar "NUM_RETRIES"
+      <>  value 3
+      )
 
 parseEndpoint :: Parser (ByteString, Int, Bool)
 parseEndpoint =
