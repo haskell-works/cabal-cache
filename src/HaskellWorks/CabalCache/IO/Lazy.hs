@@ -26,13 +26,10 @@ import Control.Monad.Trans.Except
 import Control.Monad.Trans.Resource
 import Data.Either                      (isRight)
 import Data.Generics.Product.Any
-import Data.Maybe                       (fromMaybe)
 import HaskellWorks.CabalCache.AppError
 import HaskellWorks.CabalCache.Location (Location (..))
 import HaskellWorks.CabalCache.Show
 import Network.URI                      (URI)
-import System.Environment               (lookupEnv)
-import Text.Read                        (readMaybe)
 
 import qualified Antiope.S3.Lazy                    as AWS
 import qualified Control.Concurrent                 as IO
@@ -58,10 +55,8 @@ import qualified System.IO.Error                    as IO
 handleAwsError :: MonadCatch m => m a -> m (Either AppError a)
 handleAwsError f = catch (Right <$> f) $ \(e :: AWS.Error) ->
   case e of
-    (AWS.ServiceError (AWS.ServiceError' _ s@(HTTP.Status 301 _) _ _ _ _)) -> return (Left (AwsAppError s))
-    (AWS.ServiceError (AWS.ServiceError' _ s@(HTTP.Status i _) _ _ _ _))
-      | i `elem` retryableHTTPStatuses -> return (Left (AwsAppError s))
-    _                                                                      -> throwM e
+    (AWS.ServiceError (AWS.ServiceError' _ s@(HTTP.Status _ _) _ _ _ _)) -> return (Left (AwsAppError s))
+    _                                                                    -> throwM e
 
 handleHttpError :: (MonadCatch m, MonadIO m) => m a -> ExceptT AppError m a
 handleHttpError f = catch (lift f) $ \(e :: HTTP.HttpException) ->
