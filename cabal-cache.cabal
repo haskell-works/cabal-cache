@@ -63,7 +63,7 @@ common transformers                   { build-depends: transformers             
 common unliftio                       { build-depends: unliftio                       >= 0.2.10     && < 0.3    }
 common zlib                           { build-depends: zlib                           >= 0.6.2      && < 0.7    }
 
-common config
+common project-config
   default-language:     Haskell2010
   ghc-options:          -Wall
                         -Wincomplete-record-updates
@@ -74,35 +74,35 @@ common config
     ghc-options:        -Wunused-packages
 
 library
-  import:               base, config
-                      , aeson
-                      , amazonka
-                      , amazonka-core
-                      , amazonka-s3
-                      , antiope-core
-                      , antiope-s3
-                      , bytestring
-                      , containers
-                      , cryptonite
-                      , deepseq
-                      , directory
-                      , exceptions
-                      , filepath
-                      , generic-lens
-                      , http-client
-                      , http-client-tls
-                      , http-types
-                      , lens
-                      , mtl
-                      , network-uri
-                      , optparse-applicative
-                      , process
-                      , relation
-                      , resourcet
-                      , stm
-                      , text
-                      , topograph
-                      , transformers
+  import:               base, project-config,
+                        aeson,
+                        amazonka,
+                        amazonka-core,
+                        amazonka-s3,
+                        antiope-core,
+                        antiope-s3,
+                        bytestring,
+                        containers,
+                        cryptonite,
+                        deepseq,
+                        directory,
+                        exceptions,
+                        filepath,
+                        generic-lens,
+                        http-client,
+                        http-client-tls,
+                        http-types,
+                        lens,
+                        mtl,
+                        network-uri,
+                        optparse-applicative,
+                        process,
+                        relation,
+                        resourcet,
+                        stm,
+                        text,
+                        topograph,
+                        transformers,
   other-modules:        Paths_cabal_cache
   autogen-modules:      Paths_cabal_cache
   hs-source-dirs:       src
@@ -131,29 +131,29 @@ library
                         HaskellWorks.CabalCache.Version
 
 executable cabal-cache
-  import:               base, config
-                      , aeson
-                      , amazonka
-                      , amazonka-core
-                      , antiope-core
-                      , antiope-optparse-applicative
-                      , bytestring
-                      , cabal-install-parsers
-                      , containers
-                      , directory
-                      , exceptions
-                      , filepath
-                      , generic-lens
-                      , http-types
-                      , lens
-                      , mtl
-                      , optparse-applicative
-                      , resourcet
-                      , stm
-                      , stringsearch
-                      , temporary
-                      , text
-                      , unliftio
+  import:               base, project-config,
+                        aeson,
+                        amazonka,
+                        amazonka-core,
+                        antiope-core,
+                        antiope-optparse-applicative,
+                        bytestring,
+                        cabal-install-parsers,
+                        containers,
+                        directory,
+                        exceptions,
+                        filepath,
+                        generic-lens,
+                        http-types,
+                        lens,
+                        mtl,
+                        optparse-applicative,
+                        resourcet,
+                        stm,
+                        stringsearch,
+                        temporary,
+                        text,
+                        unliftio,
   build-depends:        cabal-cache
   main-is:              Main.hs
   hs-source-dirs:       app
@@ -173,19 +173,19 @@ executable cabal-cache
   ghc-options:          -threaded -rtsopts -with-rtsopts=-N
 
 test-suite cabal-cache-test
-  import:               base, config
-                      , aeson
-                      , antiope-core
-                      , bytestring
-                      , filepath
-                      , hedgehog
-                      , hspec
-                      , http-types
-                      , hw-hspec-hedgehog
-                      , lens
-                      , network-uri
-                      , raw-strings-qq
-                      , text
+  import:               base, project-config,
+                        aeson,
+                        antiope-core,
+                        bytestring,
+                        filepath,
+                        hedgehog,
+                        hspec,
+                        http-types,
+                        hw-hspec-hedgehog,
+                        lens,
+                        network-uri,
+                        raw-strings-qq,
+                        text,
 
   type:                 exitcode-stdio-1.0
   main-is:              Spec.hs
