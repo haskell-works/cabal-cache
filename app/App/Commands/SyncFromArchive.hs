@@ -208,7 +208,8 @@ onError h failureValue f = do
   case result of
     Left _  -> return failureValue
     Right a -> return a
-  where handler e = lift (h e) >> return failureValue
+  where handler :: AppError -> ExceptT AppError (AWST' Env (ResourceT IO)) DQ.DownloadStatus
+        handler e = lift (h e) >> return failureValue
 
 optsSyncFromArchive :: Parser SyncFromArchiveOptions
 optsSyncFromArchive = SyncFromArchiveOptions
