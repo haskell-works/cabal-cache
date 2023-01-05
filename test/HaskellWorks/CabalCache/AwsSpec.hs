@@ -35,7 +35,7 @@ spec = describe "HaskellWorks.CabalCache.QuerySpec" do
     unless ci do
       envAws <- liftIO $ mkEnv Oregon (const LBSC.putStrLn)
       let Just uri = URI.parseURI "s3://jky-mayhem/hjddhd"
-      result <- liftIO $ OO.runOops $ OO.catchAsLeftM $ OO.suspendM runResourceT $ headS3Uri_ envAws uri
+      result <- liftIO $ OO.runOops $ OO.catchAsLeftM $ OO.suspendM runResourceT $ headS3Uri envAws uri
       result === Left AwsAppError
         { status = HTTP.Status { HTTP.statusCode = 404 , HTTP.statusMessage = "Not Found" }
         }

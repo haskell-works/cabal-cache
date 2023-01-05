@@ -87,12 +87,12 @@ runSyncToArchive opts = do
     CIO.putStrLn $ "Threads: "          <> tshow threads
     CIO.putStrLn $ "AWS Log level: "    <> tshow awsLogLevel
 
-    planJson <- Z.loadPlan_ (opts ^. the @"path" </> opts ^. the @"buildPath")
+    planJson <- Z.loadPlan (opts ^. the @"path" </> opts ^. the @"buildPath")
       & do OO.catchM @AppError \e -> do
             CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError e
             OO.throwM ExitFailure
 
-    compilerContext <- Z.mkCompilerContext_ planJson
+    compilerContext <- Z.mkCompilerContext planJson
       & do OO.catchM @Text \e -> do
             CIO.hPutStrLn IO.stderr e
             OO.throwM ExitFailure
@@ -139,7 +139,7 @@ runSyncToArchive opts = do
           -- either write "normal" package, or a user-specific one if the package cannot be shared
           let targetFile = if canShare planData (Z.packageId pInfo) then archiveFile else scopedArchiveFile
 
-          archiveFileExists <- IO.resourceExists_ envAws targetFile
+          archiveFileExists <- IO.resourceExists envAws targetFile
 
           unless archiveFileExists do
             packageStorePathExists <- liftIO $ doesDirectoryExist packageStorePath
@@ -156,12 +156,12 @@ runSyncToArchive opts = do
 
               metas <- createMetadata tempPath pInfo [("store-path", LC8.pack storePath)]
 
-              IO.createTar_ tempArchiveFile (rp2 <> [metas])
+              IO.createTar tempArchiveFile (rp2 <> [metas])
                 & do OO.catchM @AppError \_ -> do
                       CIO.hPutStrLn IO.stderr $ "Unable tar " <> tshow tempArchiveFile
                       OO.throwM WorkSkipped
 
-              (liftIO (LBS.readFile tempArchiveFile) >>= IO.writeResource_ envAws targetFile maxRetries)
+              (liftIO (LBS.readFile tempArchiveFile) >>= IO.writeResource envAws targetFile maxRetries)
                 & do OO.catchM @AppError \e -> do
                       CIO.hPutStrLn IO.stderr $ mempty
                         <> "ERROR: No write access to archive uris: "

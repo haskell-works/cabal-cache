@@ -125,7 +125,6 @@ library
                         HaskellWorks.CabalCache.GhcPkg
                         HaskellWorks.CabalCache.Hash
                         HaskellWorks.CabalCache.IO.Console
-                        HaskellWorks.CabalCache.IO.Error
                         HaskellWorks.CabalCache.IO.File
                         HaskellWorks.CabalCache.IO.Lazy
                         HaskellWorks.CabalCache.IO.Tar

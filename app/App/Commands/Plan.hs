@@ -51,7 +51,7 @@ runPlan opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
   CIO.putStrLn $ "Archive URIs: "     <> tshow archiveUris
   CIO.putStrLn $ "Archive version: "  <> archiveVersion
 
-  planJson <- Z.loadPlan_ (opts ^. the @"path" </> opts ^. the @"buildPath")
+  planJson <- Z.loadPlan (opts ^. the @"path" </> opts ^. the @"buildPath")
     & do OO.catchM @AppError \e -> do
           CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError e
           OO.throwM ExitFailure

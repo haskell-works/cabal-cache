@@ -6,14 +6,12 @@
 module HaskellWorks.CabalCache.IO.Tar
   ( TarGroup(..),
     createTar,
-    createTar_,
     extractTar,
-    extractTar_,
   ) where
 
 import Control.DeepSeq                  (NFData)
 import Control.Lens                     ((^.))
-import Control.Monad.Except             (ExceptT, MonadIO(..), MonadError(throwError))
+import Control.Monad.Except             (MonadIO(..), MonadError)
 import Data.Generics.Product.Any        (HasAny(the))
 import GHC.Generics                     (Generic)
 import HaskellWorks.CabalCache.AppError (AppError(GenericAppError))
@@ -28,16 +26,7 @@ data TarGroup = TarGroup
   , entryPaths :: [FilePath]
   } deriving (Show, Eq, Generic, NFData)
 
-createTar :: MonadIO m => FilePath -> [TarGroup] -> ExceptT AppError m ()
-createTar tarFile groups = do
-  let args = ["-zcf", tarFile] <> foldMap tarGroupToArgs groups
-  process <- liftIO $ IO.spawnProcess "tar" args
-  exitCode <- liftIO $ IO.waitForProcess process
-  case exitCode of
-    IO.ExitSuccess   -> return ()
-    IO.ExitFailure n -> throwError $ GenericAppError $ "Failed to create tar. Exit code: " <> tshow n
-
-createTar_ :: ()
+createTar :: ()
   => MonadIO m
   => MonadError (OO.Variant e) m
   => e `OO.CouldBe` AppError
@@ -45,7 +34,7 @@ createTar_ :: ()
   => [Char]
   -> t TarGroup
   -> m ()
-createTar_ tarFile groups = do
+createTar tarFile groups = do
   let args = ["-zcf", tarFile] <> foldMap tarGroupToArgs groups
   process <- liftIO $ IO.spawnProcess "tar" args
   exitCode <- liftIO $ IO.waitForProcess process
@@ -53,22 +42,14 @@ createTar_ tarFile groups = do
     IO.ExitSuccess   -> return ()
     IO.ExitFailure n -> OO.throwM $ GenericAppError $ "Failed to create tar. Exit code: " <> tshow n
 
-extractTar :: MonadIO m => FilePath -> FilePath -> ExceptT AppError m ()
-extractTar tarFile targetPath = do
-  process <- liftIO $ IO.spawnProcess "tar" ["-C", targetPath, "-zxf", tarFile]
-  exitCode <- liftIO $ IO.waitForProcess process
-  case exitCode of
-    IO.ExitSuccess   -> return ()
-    IO.ExitFailure n -> throwError $ GenericAppError $ "Failed to extract tar.  Exit code: " <> tshow n
-
-extractTar_ :: ()
+extractTar :: ()
   => MonadIO m
   => MonadError (OO.Variant e) m
   => e `OO.CouldBe` AppError
   => String
   -> String
   -> m ()
-extractTar_ tarFile targetPath = do
+extractTar tarFile targetPath = do
   process <- liftIO $ IO.spawnProcess "tar" ["-C", targetPath, "-zxf", tarFile]
   exitCode <- liftIO $ IO.waitForProcess process
   case exitCode of

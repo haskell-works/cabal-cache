@@ -13,9 +13,7 @@ module HaskellWorks.CabalCache.Core
     getPackages,
     relativePaths,
     loadPlan,
-    loadPlan_,
     mkCompilerContext,
-    mkCompilerContext_,
   ) where
 
 import Control.DeepSeq                  (NFData)
@@ -30,7 +28,6 @@ import Data.String                      (IsString(fromString))
 import Data.Text                        (Text)
 import GHC.Generics                     (Generic)
 import HaskellWorks.CabalCache.AppError (AppError)
-import HaskellWorks.CabalCache.Error    (nothingToError)
 import HaskellWorks.CabalCache.Show     (tshow)
 import System.FilePath                  ((<.>), (</>))
 
@@ -83,25 +80,16 @@ withExeExt = (<.> exeExt)
 withExeExt' :: Text -> Text
 withExeExt' = T.pack . withExeExt . T.unpack
 
-findExecutable :: MonadIO m => Text -> ExceptT Text m Text
-findExecutable exe = fmap T.pack $
-  liftIO (IO.findExecutable (T.unpack exe)) >>= nothingToError (exe <> " is not in path")
-
-findExecutable_ :: ()
+findExecutable :: ()
   => MonadIO f
   => MonadError (OO.Variant e) f
   => e `OO.CouldBe` Text
   => Text
   -> f Text
-findExecutable_ exe = fmap T.pack $
+findExecutable exe = fmap T.pack $
   liftIO (IO.findExecutable (T.unpack exe)) >>= OO.throwNothingAsM (exe <> " is not in path")
 
-runGhcPkg :: (MonadIO m, MonadCatch m) => Text -> [Text] -> ExceptT Text m Text
-runGhcPkg cmdExe args = catch (liftIO $ T.pack <$> IO.readProcess (T.unpack cmdExe) (fmap T.unpack args) "") $
-  \(e :: IOError) -> throwError $ "Unable to run " <> cmdExe <> " " <> T.unwords args <> ": " <> tshow e
-
--- runGhcPkg_ :: (MonadIO m, MonadCatch m) => Text -> [Text] -> ExceptT Text m Text
-runGhcPkg_ :: ()
+runGhcPkg :: ()
   => MonadCatch m
   => MonadIO m
   => MonadError (OO.Variant e) m
@@ -109,17 +97,10 @@ runGhcPkg_ :: ()
   => Text
   -> [Text]
   -> m Text
-runGhcPkg_ cmdExe args = catch (liftIO $ T.pack <$> IO.readProcess (T.unpack cmdExe) (fmap T.unpack args) "") $
+runGhcPkg cmdExe args = catch (liftIO $ T.pack <$> IO.readProcess (T.unpack cmdExe) (fmap T.unpack args) "") $
   \(e :: IOError) -> OO.throwM $ "Unable to run " <> cmdExe <> " " <> T.unwords args <> ": " <> tshow e
 
-verifyGhcPkgVersion :: (MonadIO m, MonadCatch m) => Text -> Text -> ExceptT Text m Text
-verifyGhcPkgVersion version cmdExe = do
-  stdout <- runGhcPkg cmdExe ["--version"]
-  if T.isSuffixOf (" " <> version) (mconcat (L.take 1 (T.lines stdout)))
-    then return cmdExe
-    else throwError $ cmdExe <> "has is not of version " <> version
-
-verifyGhcPkgVersion_ :: ()
+verifyGhcPkgVersion :: ()
   => MonadError (OO.Variant e) m
   => MonadIO m
   => MonadCatch m
@@ -127,33 +108,24 @@ verifyGhcPkgVersion_ :: ()
   => Text
   -> Text
   -> m Text
-verifyGhcPkgVersion_ version cmdExe = do
-  stdout <- runGhcPkg_ cmdExe ["--version"]
+verifyGhcPkgVersion version cmdExe = do
+  stdout <- runGhcPkg cmdExe ["--version"]
   if T.isSuffixOf (" " <> version) (mconcat (L.take 1 (T.lines stdout)))
     then return cmdExe
     else OO.throwM $ cmdExe <> " is not of version " <> version
 
-mkCompilerContext :: (MonadIO m, MonadCatch m) => Z.PlanJson -> ExceptT Text m Z.CompilerContext
-mkCompilerContext plan = do
-  compilerVersion <- T.stripPrefix "ghc-" (plan ^. the @"compilerId") & nothingToError "No compiler version available in plan"
-  let versionedGhcPkgCmd = "ghc-pkg-" <> compilerVersion
-  ghcPkgCmdPath <-
-          (findExecutable (withExeExt' versionedGhcPkgCmd)  >>= verifyGhcPkgVersion compilerVersion)
-    <||>  (findExecutable (withExeExt' "ghc-pkg"         )  >>= verifyGhcPkgVersion compilerVersion)
-  return (Z.CompilerContext [T.unpack ghcPkgCmdPath])
-
-mkCompilerContext_ :: ()
+mkCompilerContext :: ()
   => MonadIO m
   => MonadCatch m
   => e `OO.CouldBe` Text
   =>Z.PlanJson
   -> ExceptT (OO.Variant e) m Z.CompilerContext
-mkCompilerContext_ plan = do
+mkCompilerContext plan = do
   compilerVersion <- T.stripPrefix "ghc-" (plan ^. the @"compilerId") & OO.throwNothingAsM @Text "No compiler version available in plan"
   let versionedGhcPkgCmd = "ghc-pkg-" <> compilerVersion
   ghcPkgCmdPath <-
-          (findExecutable_ (withExeExt' versionedGhcPkgCmd)  >>= verifyGhcPkgVersion_ compilerVersion)
-    <||>  (findExecutable_ (withExeExt' "ghc-pkg"         )  >>= verifyGhcPkgVersion_ compilerVersion)
+          (findExecutable (withExeExt' versionedGhcPkgCmd)  >>= verifyGhcPkgVersion compilerVersion)
+    <||>  (findExecutable (withExeExt' "ghc-pkg"         )  >>= verifyGhcPkgVersion compilerVersion)
   return (Z.CompilerContext [T.unpack ghcPkgCmdPath])
 
 relativePaths :: FilePath -> PackageInfo -> [IO.TarGroup]
@@ -172,18 +144,13 @@ getPackages basePath planJson = forM packages (mkPackageInfo basePath compilerId
         packages :: [Z.Package]
         packages = planJson ^. the @"installPlan"
 
-loadPlan :: FilePath -> IO (Either AppError Z.PlanJson)
-loadPlan resolvedBuildPath =
-  first fromString . eitherDecode <$> LBS.readFile (resolvedBuildPath </> "cache" </> "plan.json")
-
-
-loadPlan_ :: ()
+loadPlan :: ()
   => MonadIO m
   => MonadError (OO.Variant e) m
   => e `OO.CouldBe` AppError
   => FilePath
   -> m Z.PlanJson
-loadPlan_ resolvedBuildPath = do
+loadPlan resolvedBuildPath = do
   lbs <- liftIO (LBS.readFile (resolvedBuildPath </> "cache" </> "plan.json"))
   a <- OO.throwLeftM $ first (fromString @AppError) (eitherDecode lbs)
   pure do a :: Z.PlanJson

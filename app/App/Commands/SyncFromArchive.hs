@@ -27,7 +27,7 @@ import Data.Monoid                      (Dual(Dual), Endo(Endo))
 import Data.Text                        (Text)
 import HaskellWorks.CabalCache.AppError (displayAppError, AppError)
 import HaskellWorks.CabalCache.Error    (ExitFailure(..))
-import HaskellWorks.CabalCache.IO.Lazy  (readFirstAvailableResource_)
+import HaskellWorks.CabalCache.IO.Lazy  (readFirstAvailableResource)
 import HaskellWorks.CabalCache.Location (toLocation, (<.>), (</>))
 import HaskellWorks.CabalCache.Metadata (loadMetadata)
 import HaskellWorks.CabalCache.Show     (tshow)
@@ -90,12 +90,12 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
   CIO.putStrLn $ "AWS Log level: "    <> tshow awsLogLevel
 
   OO.catchAndExitFailureM @ExitFailure do
-    planJson <- Z.loadPlan_ (opts ^. the @"path" </> opts ^. the @"buildPath")
+    planJson <- Z.loadPlan (opts ^. the @"path" </> opts ^. the @"buildPath")
       & do OO.catchM @AppError \e -> do
             CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError e
             OO.throwM ExitFailure
 
-    compilerContext <- Z.mkCompilerContext_ planJson
+    compilerContext <- Z.mkCompilerContext planJson
       & do OO.catchM @Text \e -> do
             CIO.hPutStrLn IO.stderr e
             OO.throwM ExitFailure
@@ -169,7 +169,7 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
           OO.suspendM runResourceT $ ensureStorePathCleanup packageStorePath do
             let locations = foldMap L.tuple2ToList (L.zip archiveFiles scopedArchiveFiles)
 
-            (existingArchiveFileContents, existingArchiveFile) <- readFirstAvailableResource_ envAws locations maxRetries
+            (existingArchiveFileContents, existingArchiveFile) <- readFirstAvailableResource envAws locations maxRetries
               & do OO.catchM @AppError \e -> do
                     CIO.putStrLn $ "Unable to download any of: " <> tshow locations <> " because: " <> displayAppError e
                     DQ.fail
@@ -179,7 +179,7 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
             let tempArchiveFile = tempPath </> archiveBaseName
             liftIO $ LBS.writeFile tempArchiveFile existingArchiveFileContents
 
-            IO.extractTar_ tempArchiveFile storePath
+            IO.extractTar tempArchiveFile storePath
               & do OO.catchM @AppError \e -> do
                     CIO.putStrLn $ "Unable to extract tar at " <> tshow tempArchiveFile <> " because: " <> displayAppError e
                     DQ.fail
@@ -213,7 +213,7 @@ ensureStorePathCleanup packageStorePath =
   OO.snatchM @DQ.DownloadStatus \downloadStatus -> do
     case downloadStatus of
       DQ.DownloadFailure -> do
-        M.cleanupStorePath_ packageStorePath
+        M.cleanupStorePath packageStorePath
           & do OO.catchM @AppError \e -> do
                 CIO.hPutStrLn IO.stderr $ "Failed to cleanup store path: " <> displayAppError e
       DQ.DownloadSuccess ->
