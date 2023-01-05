@@ -18,6 +18,7 @@ import HaskellWorks.Hspec.Hedgehog
 import Hedgehog
 import Test.Hspec
 
+import qualified Control.Monad.Oops         as OO
 import qualified Data.ByteString.Lazy.Char8 as LBSC
 import qualified Network.HTTP.Types         as HTTP
 import qualified Network.URI                as URI
@@ -28,13 +29,13 @@ import qualified System.Environment         as IO
 {- HLINT ignore "Redundant bracket"   -}
 
 spec :: Spec
-spec = describe "HaskellWorks.CabalCache.QuerySpec" $ do
-  xit "stub" $ requireTest $ do
+spec = describe "HaskellWorks.CabalCache.QuerySpec" do
+  xit "stub" $ requireTest do
     ci <- liftIO $ IO.lookupEnv "CI" <&> isJust
-    unless ci $ do
+    unless ci do
       envAws <- liftIO $ mkEnv Oregon (const LBSC.putStrLn)
       let Just uri = URI.parseURI "s3://jky-mayhem/hjddhd"
-      result <- liftIO $ runResourceT $ headS3Uri envAws uri
+      result <- liftIO $ OO.runOops $ OO.catchAsLeftM $ OO.suspendM runResourceT $ headS3Uri_ envAws uri
       result === Left AwsAppError
         { status = HTTP.Status { HTTP.statusCode = 404 , HTTP.statusMessage = "Not Found" }
         }

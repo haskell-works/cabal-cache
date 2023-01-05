@@ -1,12 +1,11 @@
-{-# LANGUAGE DataKinds        #-}
 {-# LANGUAGE DeriveGeneric    #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeApplications #-}
 
 module HaskellWorks.CabalCache.Topology
-  ( PlanData(..)
-  , buildPlanData
-  , canShare
+  ( PlanData(..),
+    buildPlanData,
+    canShare,
   ) where
 
 import Control.Arrow                 ((&&&))

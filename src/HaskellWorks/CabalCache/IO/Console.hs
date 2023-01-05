@@ -1,8 +1,8 @@
 module HaskellWorks.CabalCache.IO.Console
-  ( putStrLn
-  , print
-  , hPutStrLn
-  , hPrint
+  ( putStrLn,
+    print,
+    hPutStrLn,
+    hPrint,
   ) where
 
 import Control.Exception      (bracket_)

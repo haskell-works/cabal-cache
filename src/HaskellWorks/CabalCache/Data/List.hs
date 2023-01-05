@@ -1,6 +1,6 @@
 module HaskellWorks.CabalCache.Data.List
-  ( tuple2ToDL
-  , tuple2ToList
+  ( tuple2ToDL,
+    tuple2ToList,
   ) where
 
 tuple2ToDL :: (a, a) -> [a] -> [a]

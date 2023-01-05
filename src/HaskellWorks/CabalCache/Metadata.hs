@@ -1,6 +1,11 @@
 {-# LANGUAGE TupleSections #-}
 
-module HaskellWorks.CabalCache.Metadata where
+module HaskellWorks.CabalCache.Metadata
+  ( metaDir,
+    createMetadata,
+    loadMetadata,
+    deleteMetadata,
+  ) where
 
 import Control.Lens                   ((<&>))
 import Control.Monad                  (forM_)
@@ -18,14 +23,14 @@ metaDir :: String
 metaDir = "_CC_METADATA"
 
 createMetadata :: MonadIO m => FilePath -> PackageInfo -> [(T.Text, LBS.ByteString)] -> m TarGroup
-createMetadata storePath pkg values = liftIO $ do
+createMetadata storePath pkg values = liftIO do
   let pkgMetaPath = storePath </> packageDir pkg </> metaDir
   IO.createDirectoryIfMissing True pkgMetaPath
   forM_ values $ \(k, v) -> LBS.writeFile (pkgMetaPath </> T.unpack k) v
   pure $ TarGroup storePath [packageDir pkg </> metaDir]
 
 loadMetadata :: MonadIO m => FilePath -> m (Map.Map T.Text LBS.ByteString)
-loadMetadata pkgStorePath = liftIO $ do
+loadMetadata pkgStorePath = liftIO do
   let pkgMetaPath = pkgStorePath </> metaDir
   exists <- IO.doesDirectoryExist pkgMetaPath
   if not exists

@@ -1,4 +1,6 @@
-module App.Static.Posix where
+module App.Static.Posix
+  ( cabalDirectory,
+  ) where
 
 import HaskellWorks.CabalCache.Location ((</>))
 

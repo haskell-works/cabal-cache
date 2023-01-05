@@ -1,35 +1,37 @@
-{-# LANGUAGE BlockArguments      #-}
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
 
 module App.Commands.Plan
-  ( cmdPlan
+  ( cmdPlan,
   ) where
 
 import Antiope.Core                     (toText)
 import App.Commands.Options.Types       (PlanOptions (PlanOptions))
-import Control.Applicative
-import Control.Lens                     hiding ((<.>))
-import Control.Monad.Except
+import Control.Applicative              (optional)
+import Control.Lens                     ((<&>), (&), (^.), (%~), Each(each))
+import Control.Monad                    (forM)
+import Control.Monad.IO.Class           (MonadIO(liftIO))
 import Data.Generics.Product.Any        (the)
-import Data.Maybe
-import HaskellWorks.CabalCache.AppError
+import Data.Maybe                       (fromMaybe)
+import HaskellWorks.CabalCache.AppError (displayAppError, AppError)
+import HaskellWorks.CabalCache.Error    (ExitFailure(..))
 import HaskellWorks.CabalCache.Location (Location (..), (<.>), (</>))
-import HaskellWorks.CabalCache.Show
+import HaskellWorks.CabalCache.Show     (tshow)
 import HaskellWorks.CabalCache.Version  (archiveVersion)
-import Options.Applicative              hiding (columns)
+import Options.Applicative              (Parser, Mod, CommandFields)
 
 import qualified App.Commands.Options.Types         as Z
 import qualified App.Static                         as AS
-import qualified Control.Concurrent.STM             as STM
+import qualified Control.Monad.Oops                 as OO
 import qualified Data.Aeson                         as J
 import qualified Data.ByteString.Lazy               as LBS
 import qualified Data.Text                          as T
 import qualified HaskellWorks.CabalCache.Core       as Z
 import qualified HaskellWorks.CabalCache.Hash       as H
 import qualified HaskellWorks.CabalCache.IO.Console as CIO
+import qualified Options.Applicative                as OA
 import qualified System.IO                          as IO
 
 {- HLINT ignore "Monoid law, left identity" -}
@@ -37,7 +39,7 @@ import qualified System.IO                          as IO
 {- HLINT ignore "Reduce duplication"        -}
 
 runPlan :: Z.PlanOptions -> IO ()
-runPlan opts = do
+runPlan opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
   let storePath             = opts ^. the @"storePath"
   let archiveUris           = [Local ""]
   let storePathHash         = opts ^. the @"storePathHash" & fromMaybe (H.hashStorePath storePath)
@@ -49,65 +51,57 @@ runPlan opts = do
   CIO.putStrLn $ "Archive URIs: "     <> tshow archiveUris
   CIO.putStrLn $ "Archive version: "  <> archiveVersion
 
-  tEarlyExit <- STM.newTVarIO False
+  planJson <- Z.loadPlan_ (opts ^. the @"path" </> opts ^. the @"buildPath")
+    & do OO.catchM @AppError \e -> do
+          CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError e
+          OO.throwM ExitFailure
 
-  mbPlan <- Z.loadPlan $ opts ^. the @"path" </> opts ^. the @"buildPath"
+  packages <- liftIO $ Z.getPackages storePath planJson
 
-  case mbPlan of
-    Right planJson -> do
-      packages <- Z.getPackages storePath planJson
+  plan <- forM packages $ \pInfo -> do
+    let archiveFileBasename = Z.packageDir pInfo <.> ".tar.gz"
+    let archiveFiles         = versionedArchiveUris <&> (</> T.pack archiveFileBasename)
+    let scopedArchiveFiles   = versionedArchiveUris <&> (</> T.pack storePathHash </> T.pack archiveFileBasename)
 
-      plan <- forM packages $ \pInfo -> do
-        let archiveFileBasename = Z.packageDir pInfo <.> ".tar.gz"
-        let archiveFiles         = versionedArchiveUris <&> (</> T.pack archiveFileBasename)
-        let scopedArchiveFiles   = versionedArchiveUris <&> (</> T.pack storePathHash </> T.pack archiveFileBasename)
+    return $ archiveFiles <> scopedArchiveFiles
 
-        return $ archiveFiles <> scopedArchiveFiles
-
-      if outputFile == "-"
-        then LBS.putStr $ J.encode (fmap (fmap toText) plan)
-        else LBS.writeFile outputFile $ J.encode (fmap (fmap toText) plan)
-
-    Left (appError :: AppError) -> do
-      CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError appError
-
-  earlyExit <- STM.readTVarIO tEarlyExit
-
-  when earlyExit $ CIO.hPutStrLn IO.stderr "Early exit due to error"
+  if outputFile == "-"
+    then liftIO $ LBS.putStr $ J.encode (fmap (fmap toText) plan)
+    else liftIO $ LBS.writeFile outputFile $ J.encode (fmap (fmap toText) plan)
 
 optsPlan :: Parser PlanOptions
 optsPlan = PlanOptions
-  <$> strOption
-      (   long "path"
-      <>  help "Path to cabal project.  Defaults to \".\""
-      <>  metavar "DIRECTORY"
-      <>  value AS.path
+  <$> OA.strOption
+      (   OA.long "path"
+      <>  OA.help "Path to cabal project.  Defaults to \".\""
+      <>  OA.metavar "DIRECTORY"
+      <>  OA.value AS.path
       )
-  <*> strOption
-      (   long "build-path"
-      <>  help ("Path to cabal build directory.  Defaults to " <> show AS.buildPath)
-      <>  metavar "DIRECTORY"
-      <>  value AS.buildPath
+  <*> OA.strOption
+      (   OA.long "build-path"
+      <>  OA.help ("Path to cabal build directory.  Defaults to " <> show AS.buildPath)
+      <>  OA.metavar "DIRECTORY"
+      <>  OA.value AS.buildPath
       )
-  <*> strOption
-      (   long "store-path"
-      <>  help "Path to cabal store"
-      <>  metavar "DIRECTORY"
-      <>  value AS.cabalStoreDirectory
+  <*> OA.strOption
+      (   OA.long "store-path"
+      <>  OA.help "Path to cabal store"
+      <>  OA.metavar "DIRECTORY"
+      <>  OA.value AS.cabalStoreDirectory
       )
   <*> optional
-      ( strOption
-        (   long "store-path-hash"
-        <>  help "Store path hash (do not use)"
-        <>  metavar "HASH"
+      ( OA.strOption
+        (   OA.long "store-path-hash"
+        <>  OA.help "Store path hash (do not use)"
+        <>  OA.metavar "HASH"
         )
       )
-  <*> strOption
-      (   long "output-file"
-      <>  help "Output file"
-      <>  metavar "FILE"
-      <>  value "-"
+  <*> OA.strOption
+      (   OA.long "output-file"
+      <>  OA.help "Output file"
+      <>  OA.metavar "FILE"
+      <>  OA.value "-"
       )
 
 cmdPlan :: Mod CommandFields (IO ())
-cmdPlan = command "plan"  $ flip info idm $ runPlan <$> optsPlan
+cmdPlan = OA.command "plan"  $ flip OA.info OA.idm $ runPlan <$> optsPlan
