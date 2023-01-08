@@ -1,4 +1,7 @@
-module App.Static.Base where
+module App.Static.Base
+  ( homeDirectory,
+    isPosix,
+  ) where
 
 import qualified System.Directory as IO
 import qualified System.IO.Unsafe as IO

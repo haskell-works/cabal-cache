@@ -1,12 +1,17 @@
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 
-module App.Commands.Options.Types where
+module App.Commands.Options.Types
+  ( SyncToArchiveOptions(..),
+    PlanOptions(..),
+    SyncFromArchiveOptions(..),
+    VersionOptions(..),
+  ) where
 
 import Antiope.Env                      (Region)
-import GHC.Generics
 import Data.ByteString                  (ByteString)
-import HaskellWorks.CabalCache.Location
+import GHC.Generics                     (Generic)
+import HaskellWorks.CabalCache.Location (Location)
 
 import qualified Antiope.Env as AWS
 

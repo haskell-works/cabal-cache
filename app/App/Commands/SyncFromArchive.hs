@@ -1,41 +1,44 @@
-{-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE TypeApplications    #-}
 
 module App.Commands.SyncFromArchive
-  ( cmdSyncFromArchive
+  ( cmdSyncFromArchive,
   ) where
 
-import Antiope.Core                     (Region (..), runResAws, toText)
+import Antiope.Core                     (Region (..), toText)
 import Antiope.Env                      (mkEnv)
-import Antiope.Options.Applicative
+import Antiope.Options.Applicative      (autoText)
 import App.Commands.Options.Parser      (text)
 import App.Commands.Options.Types       (SyncFromArchiveOptions (SyncFromArchiveOptions))
-import Control.Applicative
-import Control.Lens                     hiding ((<.>))
-import Control.Monad.Except
-import Control.Monad.Trans.AWS          (envOverride, setEndpoint, AWST', Env)
-import Control.Monad.Trans.Resource     (ResourceT)
+import Control.Applicative              (optional, Alternative(..))
+import Control.Lens                     ((^..), (.~), (<&>), (%~), (&), (^.), Each(each))
+import Control.Monad                    (when, unless, forM_)
+import Control.Monad.Catch              (MonadCatch)
+import Control.Monad.Except             (ExceptT, MonadIO(..))
+import Control.Monad.Trans.AWS          (envOverride, setEndpoint)
+import Control.Monad.Trans.Resource     (runResourceT)
 import Data.ByteString                  (ByteString)
 import Data.ByteString.Lazy.Search      (replace)
 import Data.Generics.Product.Any        (the)
-import Data.Maybe
-import Data.Monoid
-import HaskellWorks.CabalCache.AppError
-import HaskellWorks.CabalCache.IO.Error (exceptWarn, maybeToExcept)
+import Data.Maybe                       (fromMaybe)
+import Data.Monoid                      (Dual(Dual), Endo(Endo))
+import Data.Text                        (Text)
+import HaskellWorks.CabalCache.AppError (displayAppError, AppError)
+import HaskellWorks.CabalCache.Error    (ExitFailure(..))
+import HaskellWorks.CabalCache.IO.Lazy  (readFirstAvailableResource)
 import HaskellWorks.CabalCache.Location (toLocation, (<.>), (</>))
 import HaskellWorks.CabalCache.Metadata (loadMetadata)
-import HaskellWorks.CabalCache.Show
-import HaskellWorks.CabalCache.Types    (PackageId)
+import HaskellWorks.CabalCache.Show     (tshow)
 import HaskellWorks.CabalCache.Version  (archiveVersion)
-import Options.Applicative              hiding (columns)
+import Options.Applicative              (CommandFields, Mod, Parser)
 import System.Directory                 (createDirectoryIfMissing, doesDirectoryExist)
 
 import qualified App.Commands.Options.Types                       as Z
 import qualified App.Static                                       as AS
 import qualified Control.Concurrent.STM                           as STM
+import qualified Control.Monad.Oops                               as OO
 import qualified Data.ByteString.Char8                            as C8
 import qualified Data.ByteString.Lazy                             as LBS
 import qualified Data.List                                        as L
@@ -50,9 +53,10 @@ import qualified HaskellWorks.CabalCache.Data.List                as L
 import qualified HaskellWorks.CabalCache.GhcPkg                   as GhcPkg
 import qualified HaskellWorks.CabalCache.Hash                     as H
 import qualified HaskellWorks.CabalCache.IO.Console               as CIO
-import qualified HaskellWorks.CabalCache.IO.Lazy                  as IO
+import qualified HaskellWorks.CabalCache.Store                    as M
 import qualified HaskellWorks.CabalCache.IO.Tar                   as IO
 import qualified HaskellWorks.CabalCache.Types                    as Z
+import qualified Options.Applicative                              as OA
 import qualified System.Directory                                 as IO
 import qualified System.IO                                        as IO
 import qualified System.IO.Temp                                   as IO
@@ -66,7 +70,7 @@ skippable :: Z.Package -> Bool
 skippable package = package ^. the @"packageType" == "pre-existing"
 
 runSyncFromArchive :: Z.SyncFromArchiveOptions -> IO ()
-runSyncFromArchive opts = do
+runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
   let hostEndpoint          = opts ^. the @"hostEndpoint"
   let storePath             = opts ^. the @"storePath"
   let archiveUris           = opts ^. the @"archiveUris"
@@ -85,211 +89,217 @@ runSyncFromArchive opts = do
   CIO.putStrLn $ "Threads: "          <> tshow threads
   CIO.putStrLn $ "AWS Log level: "    <> tshow awsLogLevel
 
-  mbPlan <- Z.loadPlan $ opts ^. the @"path" </> opts ^. the @"buildPath"
+  OO.catchAndExitFailureM @ExitFailure do
+    planJson <- Z.loadPlan (opts ^. the @"path" </> opts ^. the @"buildPath")
+      & do OO.catchM @AppError \e -> do
+            CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError e
+            OO.throwM ExitFailure
 
-  case mbPlan of
-    Right planJson -> do
-      compilerContextResult <- runExceptT $ Z.mkCompilerContext planJson
+    compilerContext <- Z.mkCompilerContext planJson
+      & do OO.catchM @Text \e -> do
+            CIO.hPutStrLn IO.stderr e
+            OO.throwM ExitFailure
 
-      case compilerContextResult of
-        Right compilerContext -> do
-          GhcPkg.testAvailability compilerContext
+    liftIO $ GhcPkg.testAvailability compilerContext
 
-          envAws <- IO.unsafeInterleaveIO $ (<&> envOverride .~ Dual (Endo $ \s -> case hostEndpoint of
-            Just (hostname, port, ssl) -> setEndpoint ssl hostname port s
-            Nothing -> s))
-            $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
-          let compilerId                  = planJson ^. the @"compilerId"
-          let storeCompilerPath           = storePath </> T.unpack compilerId
-          let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"
-          let storeCompilerLibPath        = storeCompilerPath </> "lib"
+    envAws <- liftIO $ IO.unsafeInterleaveIO $ (<&> envOverride .~ Dual (Endo $ \s -> case hostEndpoint of
+      Just (hostname, port, ssl) -> setEndpoint ssl hostname port s
+      Nothing -> s))
+      $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
+    let compilerId                  = planJson ^. the @"compilerId"
+    let storeCompilerPath           = storePath </> T.unpack compilerId
+    let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"
+    let storeCompilerLibPath        = storeCompilerPath </> "lib"
 
-          CIO.putStrLn "Creating store directories"
-          createDirectoryIfMissing True storePath
-          createDirectoryIfMissing True storeCompilerPath
-          createDirectoryIfMissing True storeCompilerLibPath
+    CIO.putStrLn "Creating store directories"
+    liftIO $ createDirectoryIfMissing True storePath
+    liftIO $ createDirectoryIfMissing True storeCompilerPath
+    liftIO $ createDirectoryIfMissing True storeCompilerLibPath
 
-          storeCompilerPackageDbPathExists <- doesDirectoryExist storeCompilerPackageDbPath
+    storeCompilerPackageDbPathExists <- liftIO $ doesDirectoryExist storeCompilerPackageDbPath
 
-          unless storeCompilerPackageDbPathExists $ do
-            CIO.putStrLn "Package DB missing. Creating Package DB"
-            GhcPkg.init compilerContext storeCompilerPackageDbPath
+    unless storeCompilerPackageDbPathExists do
+      CIO.putStrLn "Package DB missing. Creating Package DB"
+      liftIO $ GhcPkg.init compilerContext storeCompilerPackageDbPath
 
-          packages <- Z.getPackages storePath planJson
+    packages <- liftIO $ Z.getPackages storePath planJson
 
-          let installPlan = planJson ^. the @"installPlan"
-          let planPackages = M.fromList $ fmap (\p -> (p ^. the @"id", p)) installPlan
+    let installPlan = planJson ^. the @"installPlan"
+    let planPackages = M.fromList $ fmap (\p -> (p ^. the @"id", p)) installPlan
 
-          let planDeps0 = installPlan >>= \p -> fmap (p ^. the @"id", ) $ mempty
-                <> (p ^. the @"depends")
-                <> (p ^. the @"exeDepends")
-                <> (p ^.. the @"components" . each . the @"lib" . each . the @"depends"    . each)
-                <> (p ^.. the @"components" . each . the @"lib" . each . the @"exeDepends" . each)
-          let planDeps  = planDeps0 <> fmap (\p -> ("[universe]", p ^. the @"id")) installPlan
+    let planDeps0 = installPlan >>= \p -> fmap (p ^. the @"id", ) $ mempty
+          <> (p ^. the @"depends")
+          <> (p ^. the @"exeDepends")
+          <> (p ^.. the @"components" . each . the @"lib" . each . the @"depends"    . each)
+          <> (p ^.. the @"components" . each . the @"lib" . each . the @"exeDepends" . each)
+    let planDeps  = planDeps0 <> fmap (\p -> ("[universe]", p ^. the @"id")) installPlan
 
-          downloadQueue <- STM.atomically $ DQ.createDownloadQueue planDeps
+    downloadQueue <- liftIO $ STM.atomically $ DQ.createDownloadQueue planDeps
 
-          let pInfos = M.fromList $ fmap (\p -> (p ^. the @"packageId", p)) packages
+    let pInfos = M.fromList $ fmap (\p -> (p ^. the @"packageId", p)) packages
 
-          IO.withSystemTempDirectory "cabal-cache" $ \tempPath -> do
-            IO.createDirectoryIfMissing True (tempPath </> T.unpack compilerId </> "package.db")
+    IO.withSystemTempDirectory "cabal-cache" $ \tempPath -> do
+      liftIO $ IO.createDirectoryIfMissing True (tempPath </> T.unpack compilerId </> "package.db")
 
-            IO.forkThreadsWait threads $ DQ.runQueue downloadQueue $ \packageId -> case M.lookup packageId pInfos of
-              Just pInfo -> do
-                let archiveBaseName     = Z.packageDir pInfo <.> ".tar.gz"
-                let archiveFiles        = versionedArchiveUris & each %~ (</> T.pack archiveBaseName)
-                let scopedArchiveFiles  = scopedArchiveUris & each %~ (</> T.pack archiveBaseName)
-                let packageStorePath    = storePath </> Z.packageDir pInfo
-                let maybePackage        = M.lookup packageId planPackages
+      liftIO $ IO.forkThreadsWait threads $ OO.runOops $ DQ.runQueue downloadQueue $ \packageId -> do
+        OO.recoverOrVoidM @DQ.DownloadStatus do
+          pInfo <- OO.throwNothingM (M.lookup packageId pInfos)
+            & do OO.catchM @() \_ -> do
+                  CIO.hPutStrLn IO.stderr $ "Warning: Invalid package id: " <> packageId
+                  DQ.succeed
 
-                storeDirectoryExists <- doesDirectoryExist packageStorePath
+          let archiveBaseName     = Z.packageDir pInfo <.> ".tar.gz"
+          let archiveFiles        = versionedArchiveUris & each %~ (</> T.pack archiveBaseName)
+          let scopedArchiveFiles  = scopedArchiveUris & each %~ (</> T.pack archiveBaseName)
+          let packageStorePath    = storePath </> Z.packageDir pInfo
 
-                case maybePackage of
-                  Nothing -> do
-                    CIO.hPutStrLn IO.stderr $ "Warning: package not found" <> packageId
-                    return DQ.DownloadSuccess
-                  Just package -> if skippable package
-                    then do
-                      CIO.putStrLn $ "Skipping: " <> packageId
-                      return DQ.DownloadSuccess
-                    else if storeDirectoryExists
-                      then return DQ.DownloadSuccess
-                      else runResAws envAws $ onError (cleanupStorePath packageStorePath packageId) DQ.DownloadFailure $ do
-                        (existingArchiveFileContents, existingArchiveFile) <- ExceptT $ IO.readFirstAvailableResource envAws (foldMap L.tuple2ToList (L.zip archiveFiles scopedArchiveFiles)) maxRetries
-                        CIO.putStrLn $ "Extracting: " <> toText existingArchiveFile
+          storeDirectoryExists <- liftIO $ doesDirectoryExist packageStorePath
 
-                        let tempArchiveFile = tempPath </> archiveBaseName
-                        liftIO $ LBS.writeFile tempArchiveFile existingArchiveFileContents
-                        IO.extractTar tempArchiveFile storePath
+          package <- OO.throwNothingM (M.lookup packageId planPackages)
+            & do OO.catchM \() -> do
+                  CIO.hPutStrLn IO.stderr $ "Warning: package not found" <> packageId
+                  DQ.succeed
 
-                        meta <- loadMetadata packageStorePath
-                        oldStorePath <- maybeToExcept "store-path is missing from Metadata" (Map.lookup "store-path" meta)
+          when (skippable package) do
+            CIO.putStrLn $ "Skipping: " <> packageId
+            DQ.succeed
 
-                        case Z.confPath pInfo of
-                          Z.Tagged conf _ -> do
-                            let theConfPath = storePath </> conf
-                            let tempConfPath = tempPath </> conf
-                            confPathExists <- liftIO $ IO.doesFileExist theConfPath
-                            when confPathExists $ do
-                              confContents <- liftIO $ LBS.readFile theConfPath
-                              liftIO $ LBS.writeFile tempConfPath (replace (LBS.toStrict oldStorePath) (C8.pack storePath) confContents)
-                              liftIO $ IO.copyFile tempConfPath theConfPath >> IO.removeFile tempConfPath
+          when storeDirectoryExists DQ.succeed
 
-                            return DQ.DownloadSuccess
-              Nothing -> do
-                CIO.hPutStrLn IO.stderr $ "Warning: Invalid package id: " <> packageId
-                return DQ.DownloadSuccess
+          OO.suspendM runResourceT $ ensureStorePathCleanup packageStorePath do
+            let locations = foldMap L.tuple2ToList (L.zip archiveFiles scopedArchiveFiles)
 
-          CIO.putStrLn "Recaching package database"
-          GhcPkg.recache compilerContext storeCompilerPackageDbPath
+            (existingArchiveFileContents, existingArchiveFile) <- readFirstAvailableResource envAws locations maxRetries
+              & do OO.catchM @AppError \e -> do
+                    CIO.putStrLn $ "Unable to download any of: " <> tshow locations <> " because: " <> displayAppError e
+                    DQ.fail
 
-          failures <- STM.atomically $ STM.readTVar $ downloadQueue ^. the @"tFailures"
+            CIO.putStrLn $ "Extracting: " <> toText existingArchiveFile
 
-          forM_ failures $ \packageId -> CIO.hPutStrLn IO.stderr $ "Failed to download: " <> packageId
-        Left msg -> CIO.hPutStrLn IO.stderr msg
-    Left appError -> do
-      CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError appError
+            let tempArchiveFile = tempPath </> archiveBaseName
+            liftIO $ LBS.writeFile tempArchiveFile existingArchiveFileContents
 
-  return ()
+            IO.extractTar tempArchiveFile storePath
+              & do OO.catchM @AppError \e -> do
+                    CIO.putStrLn $ "Unable to extract tar at " <> tshow tempArchiveFile <> " because: " <> displayAppError e
+                    DQ.fail
 
-cleanupStorePath :: FilePath -> PackageId -> AppError -> AWST' Env (ResourceT IO) ()
-cleanupStorePath packageStorePath packageId e = do
-  CIO.hPutStrLn IO.stderr $ "Warning: Sync failure: " <> packageId <> ", reason: " <> displayAppError e
-  pathExists <- liftIO $ IO.doesPathExist packageStorePath
-  when pathExists $ void $ IO.removePathRecursive packageStorePath
+            meta <- loadMetadata packageStorePath
+            oldStorePath <- OO.throwNothingM (Map.lookup "store-path" meta)
+              & do OO.catchM \() -> do
+                    CIO.putStrLn "store-path is missing from Metadata"
+                    DQ.fail
 
-onError :: ()
-  => (AppError -> AWST' Env (ResourceT IO) ())
-  -> DQ.DownloadStatus
-  -> ExceptT AppError (AWST' Env (ResourceT IO)) DQ.DownloadStatus
-  -> AWST' Env (ResourceT IO) DQ.DownloadStatus
-onError h failureValue f = do
-  result <- runExceptT $ catchError (exceptWarn f) handler
-  case result of
-    Left _  -> return failureValue
-    Right a -> return a
-  where handler :: AppError -> ExceptT AppError (AWST' Env (ResourceT IO)) DQ.DownloadStatus
-        handler e = lift (h e) >> return failureValue
+            let Z.Tagged conf _ = Z.confPath pInfo
+            
+            let theConfPath = storePath </> conf
+            let tempConfPath = tempPath </> conf
+            confPathExists <- liftIO $ IO.doesFileExist theConfPath
+            when confPathExists do
+              confContents <- liftIO $ LBS.readFile theConfPath
+              liftIO $ LBS.writeFile tempConfPath (replace (LBS.toStrict oldStorePath) (C8.pack storePath) confContents)
+              liftIO $ IO.copyFile tempConfPath theConfPath >> IO.removeFile tempConfPath
+
+            DQ.succeed
+
+ensureStorePathCleanup :: ()
+  => MonadIO m
+  => MonadCatch m
+  => e `OO.CouldBe` DQ.DownloadStatus
+  => FilePath
+  -> ExceptT (OO.Variant e) m a
+  -> ExceptT (OO.Variant e) m a
+ensureStorePathCleanup packageStorePath = 
+  OO.snatchM @DQ.DownloadStatus \downloadStatus -> do
+    case downloadStatus of
+      DQ.DownloadFailure -> do
+        M.cleanupStorePath packageStorePath
+          & do OO.catchM @AppError \e -> do
+                CIO.hPutStrLn IO.stderr $ "Failed to cleanup store path: " <> displayAppError e
+      DQ.DownloadSuccess ->
+        CIO.hPutStrLn IO.stdout $ "Successfully cleaned up store path: " <> tshow packageStorePath
+    OO.throwM downloadStatus
 
 optsSyncFromArchive :: Parser SyncFromArchiveOptions
 optsSyncFromArchive = SyncFromArchiveOptions
-  <$> option (auto <|> text)
-      (  long "region"
-      <> metavar "AWS_REGION"
-      <> showDefault <> value Oregon
-      <> help "The AWS region in which to operate"
+  <$> OA.option (OA.auto <|> text)
+      (  OA.long "region"
+      <> OA.metavar "AWS_REGION"
+      <> OA.showDefault
+      <> OA.value Oregon
+      <> OA.help "The AWS region in which to operate"
       )
   <*> some
-      (  option (maybeReader (toLocation . T.pack))
-        (   long "archive-uri"
-        <>  help "Archive URI to sync to"
-        <>  metavar "S3_URI"
+      (  OA.option (OA.maybeReader (toLocation . T.pack))
+        (   OA.long "archive-uri"
+        <>  OA.help "Archive URI to sync to"
+        <>  OA.metavar "S3_URI"
         )
       )
-  <*> strOption
-      (   long "path"
-      <>  help "Path to cabal project directory.  Defaults to \".\""
-      <>  metavar "DIRECTORY"
-      <>  value AS.path
+  <*> OA.strOption
+      (   OA.long "path"
+      <>  OA.help "Path to cabal project directory.  Defaults to \".\""
+      <>  OA.metavar "DIRECTORY"
+      <>  OA.value AS.path
       )
-  <*> strOption
-      (   long "build-path"
-      <>  help ("Path to cabal build directory.  Defaults to " <> show AS.buildPath)
-      <>  metavar "DIRECTORY"
-      <>  value AS.buildPath
+  <*> OA.strOption
+      (   OA.long "build-path"
+      <>  OA.help ("Path to cabal build directory.  Defaults to " <> show AS.buildPath)
+      <>  OA.metavar "DIRECTORY"
+      <>  OA.value AS.buildPath
       )
-  <*> strOption
-      (   long "store-path"
-      <>  help ("Path to cabal store.  Defaults to " <> show AS.cabalStoreDirectory)
-      <>  metavar "DIRECTORY"
-      <>  value AS.cabalStoreDirectory
+  <*> OA.strOption
+      (   OA.long "store-path"
+      <>  OA.help ("Path to cabal store.  Defaults to " <> show AS.cabalStoreDirectory)
+      <>  OA.metavar "DIRECTORY"
+      <>  OA.value AS.cabalStoreDirectory
       )
   <*> optional
-      ( strOption
-        (   long "store-path-hash"
-        <>  help "Store path hash (do not use)"
-        <>  metavar "HASH"
+      ( OA.strOption
+        (   OA.long "store-path-hash"
+        <>  OA.help "Store path hash (do not use)"
+        <>  OA.metavar "HASH"
         )
       )
-  <*> option auto
-      (   long "threads"
-      <>  help "Number of concurrent threads"
-      <>  metavar "NUM_THREADS"
-      <>  value 4
+  <*> OA.option OA.auto
+      (   OA.long "threads"
+      <>  OA.help "Number of concurrent threads"
+      <>  OA.metavar "NUM_THREADS"
+      <>  OA.value 4
       )
   <*> optional
-      ( option autoText
-        (   long "aws-log-level"
-        <>  help "AWS Log Level.  One of (Error, Info, Debug, Trace)"
-        <>  metavar "AWS_LOG_LEVEL"
+      ( OA.option autoText
+        (   OA.long "aws-log-level"
+        <>  OA.help "AWS Log Level.  One of (Error, Info, Debug, Trace)"
+        <>  OA.metavar "AWS_LOG_LEVEL"
         )
       )
   <*> optional parseEndpoint
-  <*> option auto
-      (   long "max-retries"
-      <>  help "Max retries for S3 requests"
-      <>  metavar "NUM_RETRIES"
-      <>  value 3
+  <*> OA.option OA.auto
+      (   OA.long "max-retries"
+      <>  OA.help "Max retries for S3 requests"
+      <>  OA.metavar "NUM_RETRIES"
+      <>  OA.value 3
       )
 
 parseEndpoint :: Parser (ByteString, Int, Bool)
 parseEndpoint =
   (,,)
-  <$>  option autoText
-        (   long "host-name-override"
-        <>  help "Override the host name (default: s3.amazonaws.com)"
-        <>  metavar "HOST_NAME"
+  <$> OA.option autoText
+        (   OA.long "host-name-override"
+        <>  OA.help "Override the host name (default: s3.amazonaws.com)"
+        <>  OA.metavar "HOST_NAME"
         )
-  <*> option auto
-        (   long "host-port-override"
-        <>  help "Override the host port"
-        <>  metavar "HOST_PORT"
+  <*> OA.option OA.auto
+        (   OA.long "host-port-override"
+        <>  OA.help "Override the host port"
+        <>  OA.metavar "HOST_PORT"
         )
-  <*> option auto
-        (   long "host-ssl-override"
-        <>  help "Override the host SSL"
-        <>  metavar "HOST_SSL"
+  <*> OA.option OA.auto
+        (   OA.long "host-ssl-override"
+        <>  OA.help "Override the host SSL"
+        <>  OA.metavar "HOST_SSL"
         )
 
 cmdSyncFromArchive :: Mod CommandFields (IO ())
-cmdSyncFromArchive = command "sync-from-archive"  $ flip info idm $ runSyncFromArchive <$> optsSyncFromArchive
+cmdSyncFromArchive = OA.command "sync-from-archive" $ flip OA.info OA.idm $ runSyncFromArchive <$> optsSyncFromArchive

@@ -1,8 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module HaskellWorks.CabalCache.Version where
+module HaskellWorks.CabalCache.Version
+  ( archiveVersion,
+  ) where
 
-import Data.String
+import Data.String (IsString)
 
 archiveVersion :: IsString s => s
 archiveVersion = "v2"

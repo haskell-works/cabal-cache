@@ -1,10 +1,17 @@
-{-# LANGUAGE DataKinds        #-}
 {-# LANGUAGE TypeApplications #-}
 
-module HaskellWorks.CabalCache.GhcPkg where
+module HaskellWorks.CabalCache.GhcPkg
+  ( system,
+    runGhcPkg,
+    testAvailability,
+    recache,
+    init,
+  ) where
 
-import Control.Lens
-import Data.Generics.Product.Any
+import Prelude                   hiding (init)
+
+import Control.Lens              ((^.))
+import Data.Generics.Product.Any (HasAny(the))
 import System.Exit               (ExitCode (..), exitWith)
 import System.Process            (waitForProcess)
 

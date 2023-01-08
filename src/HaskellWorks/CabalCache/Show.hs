@@ -1,5 +1,5 @@
 module HaskellWorks.CabalCache.Show
-  ( tshow
+  ( tshow,
   ) where
 
 import Data.Text (Text)

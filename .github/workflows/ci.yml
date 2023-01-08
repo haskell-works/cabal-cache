@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["8.10.7", "8.8.4", "8.6.5"]
+        ghc: ["8.10.7", "8.8.4"]
         os: [ubuntu-latest, windows-latest]
         include:
           - ghc: "8.10.7"
@@ -71,6 +71,10 @@ jobs:
           cabal build all --enable-tests --enable-benchmarks --write-ghc-environment-files=ghc8.4.4+ -j1
 
       - name: Test
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          BINARY_CACHE_URI: ${{ secrets.BINARY_CACHE_URI }}
         run: |
           cabal test all --enable-tests --enable-benchmarks --write-ghc-environment-files=ghc8.4.4+
 

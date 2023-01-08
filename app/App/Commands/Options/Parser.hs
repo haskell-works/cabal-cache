@@ -1,13 +1,17 @@
-module App.Commands.Options.Parser where
+module App.Commands.Options.Parser
+  ( optsVersion,
+    text,
+  ) where
 
 import Antiope.Core               (FromText, fromText)
 import App.Commands.Options.Types (VersionOptions (..))
-import Options.Applicative
+import Options.Applicative        (Parser, ReadM)
 
-import qualified Data.Text as Text
+import qualified Data.Text           as Text
+import qualified Options.Applicative as OA
 
 optsVersion :: Parser VersionOptions
 optsVersion = pure VersionOptions
 
 text :: FromText a => ReadM a
-text = eitherReader (fromText . Text.pack)
+text = OA.eitherReader (fromText . Text.pack)

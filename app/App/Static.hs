@@ -1,13 +1,13 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module App.Static
-  ( cabalStoreDirectory
-  , buildPath
-  , path
+  ( cabalStoreDirectory,
+    buildPath,
+    path,
   ) where
 
-import Control.Monad.Catch
-import Control.Exception (IOException)
+import Control.Monad.Catch    (handle)
+import Control.Exception      (IOException)
 import Control.Monad.Identity (Identity(..))
 
 import qualified App.Static.Base    as S

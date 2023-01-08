@@ -3,7 +3,7 @@
 {-# LANGUAGE QuasiQuotes           #-}
 
 module HaskellWorks.CabalCache.QuerySpec
-  ( spec
+  ( spec,
   ) where
 
 import HaskellWorks.Hspec.Hedgehog
@@ -20,8 +20,8 @@ import qualified HaskellWorks.CabalCache.Types as Z
 {- HLINT ignore "Redundant bracket"   -}
 
 spec :: Spec
-spec = describe "HaskellWorks.Assist.QuerySpec" $ do
-  it "stub" $ requireTest $ do
+spec = describe "HaskellWorks.Assist.QuerySpec" do
+  it "stub" $ requireTest do
     case A.eitherDecode exampleJson of
       Right planJson -> do
         planJson === Z.PlanJson

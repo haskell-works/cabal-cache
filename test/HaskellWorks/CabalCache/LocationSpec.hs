@@ -1,16 +1,15 @@
-{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE OverloadedStrings #-}
+
 module HaskellWorks.CabalCache.LocationSpec
-( spec
-) where
+  ( spec,
+  ) where
 
 import Antiope.Core                     (toText)
+import Data.Maybe                       (fromJust)
 import HaskellWorks.CabalCache.Location
-
-import Data.Maybe                  (fromJust)
 import HaskellWorks.Hspec.Hedgehog
 import Hedgehog
-import Network.URI                 (URI)
+import Network.URI                      (URI)
 import Test.Hspec
 
 import qualified Data.List       as L
@@ -40,28 +39,28 @@ localPath = do
   pure $ "/" <> List.intercalate "/" parts <> "." <> ext
 
 spec :: Spec
-spec = describe "HaskellWorks.Assist.LocationSpec" $ do
-  it "URI bucket-only" $ requireTest $ do
+spec = describe "HaskellWorks.Assist.LocationSpec" do
+  it "URI bucket-only" $ requireTest do
     fromJust (URI.parseURI "s3://bucket") </> "directory" === fromJust (URI.parseURI "s3://bucket/directory")
 
-  it "Location bucket-only" $ requireTest $ do
+  it "Location bucket-only" $ requireTest do
     fromJust (toLocation "s3://bucket") </> "directory" === fromJust (toLocation "s3://bucket/directory")
 
-  it "S3 should roundtrip from and to text" $ require $ property $ do
+  it "S3 should roundtrip from and to text" $ require $ property do
     uri <- forAll s3Uri
     tripping (Uri uri) toText toLocation
 
-  it "LocalLocation should roundtrip from and to text" $ require $ property $ do
+  it "LocalLocation should roundtrip from and to text" $ require $ property do
     path <- forAll localPath
     tripping (Local path) toText toLocation
 
-  it "Should append s3 path" $ require $ property $ do
+  it "Should append s3 path" $ require $ property do
     loc  <- Uri <$> forAll s3Uri
     part <- forAll $ Gen.text (Range.linear 3 10) Gen.alphaNum
     ext  <- forAll $ Gen.text (Range.linear 2 4)  Gen.alphaNum
     toText (loc </> part <.> ext) === toText loc <> "/" <> part <> "." <> ext
 
-  it "Should append s3 path" $ require $ property $ do
+  it "Should append s3 path" $ require $ property do
     loc  <- Local <$> forAll localPath
     part <- forAll $ Gen.string (Range.linear 3 10) Gen.alphaNum
     ext  <- forAll $ Gen.string (Range.linear 2 4)  Gen.alphaNum
