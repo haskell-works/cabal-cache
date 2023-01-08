@@ -16,6 +16,7 @@ module HaskellWorks.CabalCache.IO.Lazy
     linkOrCopyResource,
     readHttpUri,
     removePathRecursive,
+    retryOnE,
   ) where
 
 import Antiope.Core                     (fromText, runAws)
@@ -250,6 +251,17 @@ copyS3Uri envAws source target = do
   unless (200 <= responseCode && responseCode < 300) do
     liftIO $ CIO.hPutStrLn IO.stderr $ "Error in S3 copy: " <> tshow response
     OO.throwM RetriesFailedAppError
+
+retryOnE :: forall e e' m a. ()
+  => Monad m
+  => Int
+  -> ExceptT (OO.Variant e') m a
+  -> ExceptT (OO.Variant (e : e')) m a
+  -> ExceptT (OO.Variant e') m a
+retryOnE n g f = f
+  & do OO.catchM @e \_ -> if n > 0
+        then retryOnE (n - 1) g f
+        else g
 
 retryWhen :: ()
   => MonadIO m
