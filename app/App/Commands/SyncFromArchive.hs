@@ -25,7 +25,7 @@ import Data.Generics.Product.Any        (the)
 import Data.Maybe                       (fromMaybe)
 import Data.Monoid                      (Dual(Dual), Endo(Endo))
 import Data.Text                        (Text)
-import HaskellWorks.CabalCache.AppError (displayAppError, AppError)
+import HaskellWorks.CabalCache.AppError (displayAppError, AppError, NotFound, GenericError, displayGenericError)
 import HaskellWorks.CabalCache.Error    (ExitFailure(..))
 import HaskellWorks.CabalCache.IO.Lazy  (readFirstAvailableResource)
 import HaskellWorks.CabalCache.Location (toLocation, (<.>), (</>))
@@ -93,6 +93,9 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
     planJson <- Z.loadPlan (opts ^. the @"path" </> opts ^. the @"buildPath")
       & do OO.catchM @AppError \e -> do
             CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError e
+            OO.throwM ExitFailure
+      & do OO.catchM @GenericError \e -> do
+            CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayGenericError e
             OO.throwM ExitFailure
 
     compilerContext <- Z.mkCompilerContext planJson
@@ -173,6 +176,12 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
               & do OO.catchM @AppError \e -> do
                     CIO.putStrLn $ "Unable to download any of: " <> tshow locations <> " because: " <> displayAppError e
                     DQ.fail
+              & do OO.catchM @NotFound \_ -> do
+                    CIO.putStrLn $ "Not found: " <> tshow locations
+                    DQ.fail
+              & do OO.catchM @GenericError \e -> do
+                    CIO.putStrLn $ "GenericError for " <> tshow locations <> ": " <> displayGenericError e
+                    DQ.fail
 
             CIO.putStrLn $ "Extracting: " <> toText existingArchiveFile
 
@@ -182,6 +191,9 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
             IO.extractTar tempArchiveFile storePath
               & do OO.catchM @AppError \e -> do
                     CIO.putStrLn $ "Unable to extract tar at " <> tshow tempArchiveFile <> " because: " <> displayAppError e
+                    DQ.fail
+              & do OO.catchM @GenericError \e -> do
+                    CIO.putStrLn $ "Unable to extract tar at " <> tshow tempArchiveFile <> " because: " <> displayGenericError e
                     DQ.fail
 
             meta <- loadMetadata packageStorePath
@@ -216,6 +228,8 @@ ensureStorePathCleanup packageStorePath =
         M.cleanupStorePath packageStorePath
           & do OO.catchM @AppError \e -> do
                 CIO.hPutStrLn IO.stderr $ "Failed to cleanup store path: " <> displayAppError e
+          & do OO.catchM @GenericError \e -> do
+                CIO.hPutStrLn IO.stderr $ "Failed to cleanup store path: " <> displayGenericError e
       DQ.DownloadSuccess ->
         CIO.hPutStrLn IO.stdout $ "Successfully cleaned up store path: " <> tshow packageStorePath
     OO.throwM downloadStatus

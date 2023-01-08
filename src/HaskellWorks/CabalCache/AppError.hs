@@ -3,17 +3,22 @@
 
 module HaskellWorks.CabalCache.AppError
   ( AppError(..),
+    GenericError(..),
+    NotFound(..),
     displayAppError,
+    displayGenericError,
     appErrorStatus,
   ) where
 
-import Data.String                  (IsString(..))
 import Data.Text                    (Text)
 import GHC.Generics                 (Generic)
 import HaskellWorks.CabalCache.Show (tshow)
 
-import qualified Data.Text          as T
 import qualified Network.HTTP.Types as HTTP
+
+data NotFound = NotFound deriving (Eq, Show, Generic)
+
+data GenericError = GenericError Text deriving (Eq, Show, Generic)
 
 data AppError
   = AwsAppError
@@ -23,19 +28,15 @@ data AppError
     { status :: HTTP.Status
     }
   | RetriesFailedAppError
-  | NotFound
-  | GenericAppError Text
   deriving (Eq, Show, Generic)
-
-instance IsString AppError where
-  fromString = GenericAppError . T.pack
 
 displayAppError :: AppError -> Text
 displayAppError (AwsAppError s)       = tshow s
 displayAppError (HttpAppError s)      = tshow s
 displayAppError RetriesFailedAppError = "Multiple retries failed"
-displayAppError NotFound              = "Not found"
-displayAppError (GenericAppError msg) = msg
+
+displayGenericError :: GenericError -> Text
+displayGenericError (GenericError msg) = msg
 
 appErrorStatus :: AppError -> Maybe Int
 appErrorStatus (AwsAppError (HTTP.Status statusCode _)) = Just statusCode

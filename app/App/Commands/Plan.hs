@@ -15,7 +15,7 @@ import Control.Monad                    (forM)
 import Control.Monad.IO.Class           (MonadIO(liftIO))
 import Data.Generics.Product.Any        (the)
 import Data.Maybe                       (fromMaybe)
-import HaskellWorks.CabalCache.AppError (displayAppError, AppError)
+import HaskellWorks.CabalCache.AppError (displayAppError, AppError, GenericError, displayGenericError)
 import HaskellWorks.CabalCache.Error    (ExitFailure(..))
 import HaskellWorks.CabalCache.Location (Location (..), (<.>), (</>))
 import HaskellWorks.CabalCache.Show     (tshow)
@@ -54,6 +54,9 @@ runPlan opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
   planJson <- Z.loadPlan (opts ^. the @"path" </> opts ^. the @"buildPath")
     & do OO.catchM @AppError \e -> do
           CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError e
+          OO.throwM ExitFailure
+    & do OO.catchM @GenericError \e -> do
+          CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayGenericError e
           OO.throwM ExitFailure
 
   packages <- liftIO $ Z.getPackages storePath planJson

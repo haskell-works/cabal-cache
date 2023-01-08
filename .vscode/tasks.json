@@ -37,7 +37,7 @@
       "label": "Test",
       "type": "shell",
       "command": "bash",
-      "args": ["-lc", "BINARY_CACHE_URI=s3://cache.haskellworks.io/cabal-cache-test cabal test all --enable-tests && echo 'Done'"],
+      "args": ["-lc", "cabal test all --enable-tests && echo 'Done'"],
       "group": {
         "kind": "test",
         "isDefault": true
