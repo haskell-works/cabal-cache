@@ -12,18 +12,17 @@ import Antiope.Env                      (mkEnv)
 import Antiope.Options.Applicative      (autoText)
 import App.Commands.Options.Parser      (text)
 import App.Commands.Options.Types       (CpOptions (CpOptions))
-import Control.Applicative              (optional, Alternative(..))
+import Control.Applicative              (Alternative(..), optional)
 import Control.Lens                     ((.~), (<&>), (&), (^.))
 import Control.Monad.Except             (MonadIO(..))
 import Control.Monad.Trans.AWS          (envOverride, setEndpoint)
 import Data.ByteString                  (ByteString)
 import Data.Generics.Product.Any        (the)
 import Data.Monoid                      (Dual(Dual), Endo(Endo))
-import HaskellWorks.CabalCache.AppError (displayAppError)
+import HaskellWorks.CabalCache.AppError (AppError(..), GenericError(..), displayAppError, displayGenericError)
 import HaskellWorks.CabalCache.Error    (ExitFailure(..))
 import HaskellWorks.CabalCache.IO.Lazy  (copyS3Uri)
 import Network.URI                      (parseURI)
-import Options.Applicative              (CommandFields, Mod, Parser)
 
 import qualified App.Commands.Options.Types                       as Z
 import qualified Control.Monad.Oops                               as OO
@@ -51,10 +50,12 @@ runCp opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
       $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
 
     copyS3Uri envAws srcUri dstUri
-      & do OO.catchM \e -> do
+      & do OO.catchM @AppError \e -> do
             CIO.hPutStrLn IO.stderr $ "Copy failed: " <> displayAppError e
+      & do OO.catchM @GenericError \e -> do
+            CIO.hPutStrLn IO.stderr $ "Copy failed: " <> displayGenericError e
 
-optsCp :: Parser CpOptions
+optsCp :: OA.Parser CpOptions
 optsCp = CpOptions
   <$> OA.option (OA.auto <|> text)
       (  OA.long "region"
@@ -82,7 +83,7 @@ optsCp = CpOptions
       )
   <*> optional parseEndpoint
 
-parseEndpoint :: Parser (ByteString, Int, Bool)
+parseEndpoint :: OA.Parser (ByteString, Int, Bool)
 parseEndpoint =
   (,,)
   <$> OA.option autoText
@@ -101,5 +102,5 @@ parseEndpoint =
         <>  OA.metavar "HOST_SSL"
         )
 
-cmdCp :: Mod CommandFields (IO ())
+cmdCp :: OA.Mod OA.CommandFields (IO ())
 cmdCp = OA.command "cp" $ flip OA.info OA.idm $ runCp <$> optsCp

@@ -201,6 +201,7 @@ test-suite cabal-cache-test
                         http-types,
                         hw-hspec-hedgehog,
                         lens,
+                        mtl,
                         network-uri,
                         oops,
                         raw-strings-qq,

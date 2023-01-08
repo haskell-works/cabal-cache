@@ -23,7 +23,7 @@ import Data.List                        ((\\))
 import Data.Maybe                       (fromMaybe)
 import Data.Monoid                      (Dual(Dual), Endo(Endo))
 import Data.Text                        (Text)
-import HaskellWorks.CabalCache.AppError (displayAppError, AppError)
+import HaskellWorks.CabalCache.AppError (displayAppError, AppError, GenericError, displayGenericError)
 import HaskellWorks.CabalCache.Error    (ExitFailure(..))
 import HaskellWorks.CabalCache.Location (Location (..), toLocation, (<.>), (</>))
 import HaskellWorks.CabalCache.Metadata (createMetadata)
@@ -90,6 +90,9 @@ runSyncToArchive opts = do
     planJson <- Z.loadPlan (opts ^. the @"path" </> opts ^. the @"buildPath")
       & do OO.catchM @AppError \e -> do
             CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError e
+            OO.throwM ExitFailure
+      & do OO.catchM @GenericError \e -> do
+            CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayGenericError e
             OO.throwM ExitFailure
 
     compilerContext <- Z.mkCompilerContext planJson
@@ -160,6 +163,9 @@ runSyncToArchive opts = do
                 & do OO.catchM @AppError \_ -> do
                       CIO.hPutStrLn IO.stderr $ "Unable tar " <> tshow tempArchiveFile
                       OO.throwM WorkSkipped
+                & do OO.catchM @GenericError \_ -> do
+                      CIO.hPutStrLn IO.stderr $ "Unable tar " <> tshow tempArchiveFile
+                      OO.throwM WorkSkipped
 
               (liftIO (LBS.readFile tempArchiveFile) >>= IO.writeResource envAws targetFile maxRetries)
                 & do OO.catchM @AppError \e -> do
@@ -167,6 +173,12 @@ runSyncToArchive opts = do
                         <> "ERROR: No write access to archive uris: "
                         <> tshow (fmap toText [scopedArchiveFile, archiveFile])
                         <> " " <> displayAppError e
+                      OO.throwM WorkFatal
+                & do OO.catchM @GenericError \e -> do
+                      CIO.hPutStrLn IO.stderr $ mempty
+                        <> "ERROR: No write access to archive uris: "
+                        <> tshow (fmap toText [scopedArchiveFile, archiveFile])
+                        <> " " <> displayGenericError e
                       OO.throwM WorkFatal
               
     return ()

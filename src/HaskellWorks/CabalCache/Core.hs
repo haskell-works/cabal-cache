@@ -24,10 +24,9 @@ import Data.Aeson                       (eitherDecode)
 import Data.Bifunctor                   (first)
 import Data.Bool                        (bool)
 import Data.Generics.Product.Any        (the)
-import Data.String                      (IsString(fromString))
 import Data.Text                        (Text)
 import GHC.Generics                     (Generic)
-import HaskellWorks.CabalCache.AppError (AppError)
+import HaskellWorks.CabalCache.AppError (GenericError(..))
 import HaskellWorks.CabalCache.Show     (tshow)
 import System.FilePath                  ((<.>), (</>))
 
@@ -147,12 +146,12 @@ getPackages basePath planJson = forM packages (mkPackageInfo basePath compilerId
 loadPlan :: ()
   => MonadIO m
   => MonadError (OO.Variant e) m
-  => e `OO.CouldBe` AppError
+  => e `OO.CouldBe` GenericError
   => FilePath
   -> m Z.PlanJson
 loadPlan resolvedBuildPath = do
   lbs <- liftIO (LBS.readFile (resolvedBuildPath </> "cache" </> "plan.json"))
-  a <- OO.throwLeftM $ first (fromString @AppError) (eitherDecode lbs)
+  a <- OO.throwLeftM $ first (GenericError . T.pack) (eitherDecode lbs)
   pure do a :: Z.PlanJson
 
 -------------------------------------------------------------------------------

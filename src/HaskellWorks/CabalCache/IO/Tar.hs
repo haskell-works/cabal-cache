@@ -14,7 +14,7 @@ import Control.Lens                     ((^.))
 import Control.Monad.Except             (MonadIO(..), MonadError)
 import Data.Generics.Product.Any        (HasAny(the))
 import GHC.Generics                     (Generic)
-import HaskellWorks.CabalCache.AppError (AppError(GenericAppError))
+import HaskellWorks.CabalCache.AppError (GenericError(..))
 import HaskellWorks.CabalCache.Show     (tshow)
 
 import qualified Control.Monad.Oops as OO
@@ -29,7 +29,7 @@ data TarGroup = TarGroup
 createTar :: ()
   => MonadIO m
   => MonadError (OO.Variant e) m
-  => e `OO.CouldBe` AppError
+  => e `OO.CouldBe` GenericError
   => Foldable t
   => [Char]
   -> t TarGroup
@@ -40,12 +40,12 @@ createTar tarFile groups = do
   exitCode <- liftIO $ IO.waitForProcess process
   case exitCode of
     IO.ExitSuccess   -> return ()
-    IO.ExitFailure n -> OO.throwM $ GenericAppError $ "Failed to create tar. Exit code: " <> tshow n
+    IO.ExitFailure n -> OO.throwM $ GenericError $ "Failed to create tar. Exit code: " <> tshow n
 
 extractTar :: ()
   => MonadIO m
   => MonadError (OO.Variant e) m
-  => e `OO.CouldBe` AppError
+  => e `OO.CouldBe` GenericError
   => String
   -> String
   -> m ()
@@ -54,7 +54,7 @@ extractTar tarFile targetPath = do
   exitCode <- liftIO $ IO.waitForProcess process
   case exitCode of
     IO.ExitSuccess   -> return ()
-    IO.ExitFailure n -> OO.throwM $ GenericAppError $ "Failed to extract tar.  Exit code: " <> tshow n
+    IO.ExitFailure n -> OO.throwM $ GenericError $ "Failed to extract tar.  Exit code: " <> tshow n
 
 tarGroupToArgs :: TarGroup -> [String]
 tarGroupToArgs tarGroup = ["-C", tarGroup ^. the @"basePath"] <> tarGroup ^. the @"entryPaths"
