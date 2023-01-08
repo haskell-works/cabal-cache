@@ -10,6 +10,7 @@ module HaskellWorks.CabalCache.IO.Lazy
     readFirstAvailableResource,
     resourceExists,
     headS3Uri,
+    copyS3Uri,
     writeResource,
     createLocalDirectoryIfMissing,
     linkOrCopyResource,
