@@ -14,7 +14,7 @@ import Control.Lens                     ((^.))
 import Control.Monad.Except             (MonadIO(..), MonadError)
 import Data.Generics.Product.Any        (HasAny(the))
 import GHC.Generics                     (Generic)
-import HaskellWorks.CabalCache.AppError (GenericError(..))
+import HaskellWorks.CabalCache.Error    (GenericError(..))
 import HaskellWorks.CabalCache.Show     (tshow)
 
 import qualified Control.Monad.Oops as OO

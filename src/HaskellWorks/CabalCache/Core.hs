@@ -26,7 +26,7 @@ import Data.Bool                        (bool)
 import Data.Generics.Product.Any        (the)
 import Data.Text                        (Text)
 import GHC.Generics                     (Generic)
-import HaskellWorks.CabalCache.AppError (GenericError(..))
+import HaskellWorks.CabalCache.Error    (GenericError(..))
 import HaskellWorks.CabalCache.Show     (tshow)
 import System.FilePath                  ((<.>), (</>))
 

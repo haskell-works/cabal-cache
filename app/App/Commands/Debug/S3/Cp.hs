@@ -16,8 +16,8 @@ import Control.Monad.Trans.AWS          (envOverride, setEndpoint)
 import Data.ByteString                  (ByteString)
 import Data.Generics.Product.Any        (the)
 import Data.Monoid                      (Dual(Dual), Endo(Endo))
-import HaskellWorks.CabalCache.AppError (AppError(..), GenericError(..), displayAppError, displayGenericError)
-import HaskellWorks.CabalCache.Error    (ExitFailure(..))
+import HaskellWorks.CabalCache.AppError (AppError(..), displayAppError)
+import HaskellWorks.CabalCache.Error    (ExitFailure(..), GenericError(..), displayGenericError)
 import Network.URI                      (parseURI)
 
 import qualified App.Commands.Options.Types         as Z

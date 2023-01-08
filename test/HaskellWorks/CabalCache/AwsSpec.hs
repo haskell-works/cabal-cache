@@ -13,7 +13,8 @@ import Control.Monad
 import Control.Monad.Except             (runExceptT)
 import Control.Monad.IO.Class
 import Data.Maybe                       (isJust)
-import HaskellWorks.CabalCache.AppError
+import HaskellWorks.CabalCache.AppError (AppError(..))
+import HaskellWorks.CabalCache.Error    (GenericError)
 import HaskellWorks.Hspec.Hedgehog
 import Hedgehog
 import Test.Hspec
