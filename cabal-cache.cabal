@@ -156,6 +156,7 @@ executable cabal-cache
                         generic-lens,
                         lens,
                         mtl,
+                        network-uri,
                         oops,
                         optparse-applicative,
                         resourcet,
@@ -169,6 +170,9 @@ executable cabal-cache
   hs-source-dirs:       app
   other-modules:        App.Commands
                         App.Commands.Options.Parser
+                        App.Commands.Debug
+                        App.Commands.Debug.S3
+                        App.Commands.Debug.S3.Cp
                         App.Commands.Options.Types
                         App.Commands.Plan
                         App.Commands.SyncFromArchive

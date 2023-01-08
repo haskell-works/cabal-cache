@@ -1,5 +1,6 @@
 module App.Commands where
 
+import App.Commands.Debug           (cmdDebug)
 import App.Commands.Plan            (cmdPlan)
 import App.Commands.SyncFromArchive (cmdSyncFromArchive)
 import App.Commands.SyncToArchive   (cmdSyncToArchive)
@@ -20,3 +21,4 @@ commandsGeneral = OA.subparser $ mempty
   <>  cmdSyncFromArchive
   <>  cmdSyncToArchive
   <>  cmdVersion
+  <>  cmdDebug

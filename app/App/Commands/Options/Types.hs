@@ -2,9 +2,10 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 
 module App.Commands.Options.Types
-  ( SyncToArchiveOptions(..),
+  ( CpOptions(..),
     PlanOptions(..),
     SyncFromArchiveOptions(..),
+    SyncToArchiveOptions(..),
     VersionOptions(..),
   ) where
 
@@ -12,8 +13,17 @@ import Antiope.Env                      (Region)
 import Data.ByteString                  (ByteString)
 import GHC.Generics                     (Generic)
 import HaskellWorks.CabalCache.Location (Location)
+import Network.URI                      (URI)
 
 import qualified Antiope.Env as AWS
+
+data CpOptions = CpOptions
+  { region        :: Region
+  , srcUri        :: URI
+  , dstUri        :: URI
+  , awsLogLevel   :: Maybe AWS.LogLevel
+  , hostEndpoint  :: Maybe (ByteString, Int, Bool)
+  } deriving (Eq, Show, Generic)
 
 data SyncToArchiveOptions = SyncToArchiveOptions
   { region        :: Region
