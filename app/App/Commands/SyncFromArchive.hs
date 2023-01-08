@@ -7,9 +7,6 @@ module App.Commands.SyncFromArchive
   ( cmdSyncFromArchive,
   ) where
 
-import Antiope.Core                     (Region (..), toText)
-import Antiope.Env                      (mkEnv)
-import Antiope.Options.Applicative      (autoText)
 import App.Commands.Options.Parser      (text)
 import App.Commands.Options.Types       (SyncFromArchiveOptions (SyncFromArchiveOptions))
 import Control.Applicative              (optional, Alternative(..))
@@ -53,9 +50,11 @@ import qualified HaskellWorks.CabalCache.Data.List                as L
 import qualified HaskellWorks.CabalCache.GhcPkg                   as GhcPkg
 import qualified HaskellWorks.CabalCache.Hash                     as H
 import qualified HaskellWorks.CabalCache.IO.Console               as CIO
-import qualified HaskellWorks.CabalCache.Store                    as M
 import qualified HaskellWorks.CabalCache.IO.Tar                   as IO
+import qualified HaskellWorks.CabalCache.Store                    as M
 import qualified HaskellWorks.CabalCache.Types                    as Z
+import qualified Network.AWS                                      as AWS
+import qualified Network.AWS.Data                                 as AWS
 import qualified Options.Applicative                              as OA
 import qualified System.Directory                                 as IO
 import qualified System.IO                                        as IO
@@ -81,10 +80,10 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
   let scopedArchiveUris     = versionedArchiveUris & each %~ (</> T.pack storePathHash)
   let maxRetries            = opts ^. the @"maxRetries"
 
-  CIO.putStrLn $ "Store path: "       <> toText storePath
+  CIO.putStrLn $ "Store path: "       <> AWS.toText storePath
   CIO.putStrLn $ "Store path hash: "  <> T.pack storePathHash
   forM_ archiveUris $ \archiveUri -> do
-    CIO.putStrLn $ "Archive URI: "      <> toText archiveUri
+    CIO.putStrLn $ "Archive URI: "      <> AWS.toText archiveUri
   CIO.putStrLn $ "Archive version: "  <> archiveVersion
   CIO.putStrLn $ "Threads: "          <> tshow threads
   CIO.putStrLn $ "AWS Log level: "    <> tshow awsLogLevel
@@ -108,7 +107,7 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
     envAws <- liftIO $ IO.unsafeInterleaveIO $ (<&> envOverride .~ Dual (Endo $ \s -> case hostEndpoint of
       Just (hostname, port, ssl) -> setEndpoint ssl hostname port s
       Nothing -> s))
-      $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
+      $ AWS.mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
     let compilerId                  = planJson ^. the @"compilerId"
     let storeCompilerPath           = storePath </> T.unpack compilerId
     let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"
@@ -183,7 +182,7 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
                     CIO.putStrLn $ "GenericError for " <> tshow locations <> ": " <> displayGenericError e
                     DQ.fail
 
-            CIO.putStrLn $ "Extracting: " <> toText existingArchiveFile
+            CIO.putStrLn $ "Extracting: " <> AWS.toText existingArchiveFile
 
             let tempArchiveFile = tempPath </> archiveBaseName
             liftIO $ LBS.writeFile tempArchiveFile existingArchiveFileContents
@@ -240,7 +239,7 @@ optsSyncFromArchive = SyncFromArchiveOptions
       (  OA.long "region"
       <> OA.metavar "AWS_REGION"
       <> OA.showDefault
-      <> OA.value Oregon
+      <> OA.value AWS.Oregon
       <> OA.help "The AWS region in which to operate"
       )
   <*> some
@@ -282,7 +281,7 @@ optsSyncFromArchive = SyncFromArchiveOptions
       <>  OA.value 4
       )
   <*> optional
-      ( OA.option autoText
+      ( OA.option (OA.eitherReader (AWS.fromText . T.pack))
         (   OA.long "aws-log-level"
         <>  OA.help "AWS Log Level.  One of (Error, Info, Debug, Trace)"
         <>  OA.metavar "AWS_LOG_LEVEL"
@@ -299,7 +298,7 @@ optsSyncFromArchive = SyncFromArchiveOptions
 parseEndpoint :: Parser (ByteString, Int, Bool)
 parseEndpoint =
   (,,)
-  <$> OA.option autoText
+  <$> OA.option (OA.eitherReader (AWS.fromText . T.pack))
         (   OA.long "host-name-override"
         <>  OA.help "Override the host name (default: s3.amazonaws.com)"
         <>  OA.metavar "HOST_NAME"

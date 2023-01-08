@@ -6,8 +6,6 @@ module App.Commands.SyncToArchive
   ( cmdSyncToArchive,
   ) where
 
-import Antiope.Core                     (Region (..), toText)
-import Antiope.Env                      (mkEnv)
 import App.Commands.Options.Parser      (text)
 import App.Commands.Options.Types       (SyncToArchiveOptions (SyncToArchiveOptions))
 import Control.Applicative              ( Alternative((<|>)), optional)
@@ -34,7 +32,6 @@ import Options.Applicative              (Parser, Mod, CommandFields)
 import System.Directory                 (doesDirectoryExist)
 import System.FilePath                  (takeDirectory)
 
-import qualified Antiope.Options.Applicative        as OA
 import qualified App.Commands.Options.Types         as Z
 import qualified App.Static                         as AS
 import qualified Control.Concurrent.STM             as STM
@@ -51,6 +48,8 @@ import qualified HaskellWorks.CabalCache.IO.Console as CIO
 import qualified HaskellWorks.CabalCache.IO.File    as IO
 import qualified HaskellWorks.CabalCache.IO.Lazy    as IO
 import qualified HaskellWorks.CabalCache.IO.Tar     as IO
+import qualified Network.AWS                        as AWS
+import qualified Network.AWS.Data                   as AWS
 import qualified Options.Applicative                as OA
 import qualified System.Directory                   as IO
 import qualified System.IO                          as IO
@@ -80,9 +79,9 @@ runSyncToArchive opts = do
     let scopedArchiveUri    = versionedArchiveUri </> T.pack storePathHash
     let maxRetries          = opts ^. the @"maxRetries"
 
-    CIO.putStrLn $ "Store path: "       <> toText storePath
+    CIO.putStrLn $ "Store path: "       <> AWS.toText storePath
     CIO.putStrLn $ "Store path hash: "  <> T.pack storePathHash
-    CIO.putStrLn $ "Archive URI: "      <> toText archiveUri
+    CIO.putStrLn $ "Archive URI: "      <> AWS.toText archiveUri
     CIO.putStrLn $ "Archive version: "  <> archiveVersion
     CIO.putStrLn $ "Threads: "          <> tshow threads
     CIO.putStrLn $ "AWS Log level: "    <> tshow awsLogLevel
@@ -105,7 +104,7 @@ runSyncToArchive opts = do
     envAws <- liftIO $ IO.unsafeInterleaveIO $ (<&> envOverride .~ Dual (Endo $ \s -> case hostEndpoint of
       Just (hostname, port, ssl) -> setEndpoint ssl hostname port s
       Nothing -> s))
-      $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
+      $ AWS.mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
 
     let archivePath       = versionedArchiveUri </> compilerId
     let scopedArchivePath = scopedArchiveUri </> compilerId
@@ -153,7 +152,7 @@ runSyncToArchive opts = do
 
               let rp2 = Z.relativePaths storePath pInfo
 
-              CIO.putStrLn $ "Creating " <> toText targetFile
+              CIO.putStrLn $ "Creating " <> AWS.toText targetFile
 
               let tempArchiveFile = tempPath </> archiveFileBasename
 
@@ -171,13 +170,13 @@ runSyncToArchive opts = do
                 & do OO.catchM @AppError \e -> do
                       CIO.hPutStrLn IO.stderr $ mempty
                         <> "ERROR: No write access to archive uris: "
-                        <> tshow (fmap toText [scopedArchiveFile, archiveFile])
+                        <> tshow (fmap AWS.toText [scopedArchiveFile, archiveFile])
                         <> " " <> displayAppError e
                       OO.throwM WorkFatal
                 & do OO.catchM @GenericError \e -> do
                       CIO.hPutStrLn IO.stderr $ mempty
                         <> "ERROR: No write access to archive uris: "
-                        <> tshow (fmap toText [scopedArchiveFile, archiveFile])
+                        <> tshow (fmap AWS.toText [scopedArchiveFile, archiveFile])
                         <> " " <> displayGenericError e
                       OO.throwM WorkFatal
               
@@ -211,7 +210,7 @@ optsSyncToArchive = SyncToArchiveOptions
       (  OA.long "region"
       <> OA.metavar "AWS_REGION"
       <> OA.showDefault
-      <> OA.value Oregon
+      <> OA.value AWS.Oregon
       <> OA.help "The AWS region in which to operate"
       )
   <*> OA.option (OA.maybeReader (toLocation . Text.pack))
@@ -252,7 +251,7 @@ optsSyncToArchive = SyncToArchiveOptions
       <>  OA.value 4
       )
   <*> optional
-      ( OA.option OA.autoText
+      ( OA.option (OA.eitherReader (AWS.fromText . T.pack))
         (   OA.long "aws-log-level"
         <>  OA.help "AWS Log Level.  One of (Error, Info, Debug, Trace)"
         <>  OA.metavar "AWS_LOG_LEVEL"
@@ -269,7 +268,7 @@ optsSyncToArchive = SyncToArchiveOptions
 parseEndpoint :: Parser (ByteString, Int, Bool)
 parseEndpoint =
   (,,)
-  <$>  OA.option OA.autoText
+  <$>  OA.option (OA.eitherReader (AWS.fromText . T.pack))
         (   OA.long "host-name-override"
         <>  OA.help "Override the host name (default: s3.amazonaws.com)"
         <>  OA.metavar "HOST_NAME"

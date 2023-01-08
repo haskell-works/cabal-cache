@@ -9,16 +9,15 @@ module App.Commands.Options.Types
     VersionOptions(..),
   ) where
 
-import Antiope.Env                      (Region)
 import Data.ByteString                  (ByteString)
 import GHC.Generics                     (Generic)
 import HaskellWorks.CabalCache.Location (Location)
 import Network.URI                      (URI)
 
-import qualified Antiope.Env as AWS
+import qualified Network.AWS as AWS
 
 data CpOptions = CpOptions
-  { region        :: Region
+  { region        :: AWS.Region
   , srcUri        :: URI
   , dstUri        :: URI
   , awsLogLevel   :: Maybe AWS.LogLevel
@@ -26,7 +25,7 @@ data CpOptions = CpOptions
   } deriving (Eq, Show, Generic)
 
 data SyncToArchiveOptions = SyncToArchiveOptions
-  { region        :: Region
+  { region        :: AWS.Region
   , archiveUri    :: Location
   , path          :: FilePath
   , buildPath     :: FilePath
@@ -47,7 +46,7 @@ data PlanOptions = PlanOptions
   } deriving (Eq, Show, Generic)
 
 data SyncFromArchiveOptions = SyncFromArchiveOptions
-  { region        :: Region
+  { region        :: AWS.Region
   , archiveUris   :: [Location]
   , path          :: FilePath
   , buildPath     :: FilePath

@@ -9,8 +9,6 @@ module HaskellWorks.CabalCache.IO.Lazy
   ( readResource,
     readFirstAvailableResource,
     resourceExists,
-    headS3Uri,
-    copyS3Uri,
     writeResource,
     createLocalDirectoryIfMissing,
     linkOrCopyResource,
@@ -19,10 +17,8 @@ module HaskellWorks.CabalCache.IO.Lazy
     retryOnE,
   ) where
 
-import Antiope.Core                     (fromText, runAws)
-import Antiope.S3.Lazy                  (S3Uri)
-import Control.Lens                     ((&), (^.), (%~))
-import Control.Monad                    (void, unless)
+import Control.Lens                     ((&), (^.))
+import Control.Monad                    (unless)
 import Control.Monad.Catch              (MonadCatch(..), MonadThrow(throwM))
 import Control.Monad.Except             (MonadIO(..), MonadError(..))
 import Control.Monad.Trans.Except       (ExceptT(..))
@@ -33,41 +29,25 @@ import HaskellWorks.CabalCache.AppError (AppError(..), NotFound(..), appErrorSta
 import HaskellWorks.CabalCache.Location (Location (..))
 import HaskellWorks.CabalCache.Show     (tshow)
 import Network.AWS                      (HasEnv)
-import Network.AWS.Data                 (ToText(..))
 import Network.URI                      (URI)
 
-import qualified Antiope.S3.Lazy                      as AWS
 import qualified Control.Concurrent                   as IO
 import qualified Control.Monad.Oops                   as OO
 import qualified Data.ByteString.Lazy                 as LBS
 import qualified Data.Text                            as T
+import qualified HaskellWorks.CabalCache.AWS.S3       as S3
 import qualified HaskellWorks.CabalCache.IO.Console   as CIO
-import qualified Network.AWS                          as AWS
-import qualified Network.AWS.S3.CopyObject            as AWS
-import qualified Network.AWS.S3.HeadObject            as AWS
-import qualified Network.AWS.S3.PutObject             as AWS
+import qualified HaskellWorks.CabalCache.URI          as URI
 import qualified Network.HTTP.Client                  as HTTP
 import qualified Network.HTTP.Client.TLS              as HTTPS
-import qualified Network.HTTP.Types                   as HTTP
 import qualified System.Directory                     as IO
 import qualified System.FilePath.Posix                as FP
 import qualified System.IO                            as IO
-import qualified System.IO.Error as IO
+import qualified System.IO.Error                      as IO
 
 {- HLINT ignore "Redundant do"        -}
 {- HLINT ignore "Reduce duplication"  -}
 {- HLINT ignore "Redundant bracket"   -}
-
-handleAwsError :: ()
-  => MonadCatch m
-  => MonadError (OO.Variant e) m
-  => e `OO.CouldBe` AppError
-  => m a
-  -> m a
-handleAwsError f = catch f $ \(e :: AWS.Error) ->
-  case e of
-    (AWS.ServiceError (AWS.ServiceError' _ s@(HTTP.Status _ _) _ _ _ _)) -> OO.throwM $ AwsAppError s
-    _                                                                    -> throwM e
 
 handleHttpError :: ()
   => MonadError (OO.Variant e) m
@@ -84,25 +64,6 @@ handleHttpError f = catch f $ \(e :: HTTP.HttpException) ->
       HTTP.StatusCodeException resp _ -> OO.throwM (HttpAppError (resp & HTTP.responseStatus))
       _                               -> OO.throwM (GenericError (tshow e'))
     _                                 -> liftIO $ throwM e
-
-getS3Uri :: ()
-  => MonadError (OO.Variant e) m
-  => MonadCatch m
-  => e `OO.CouldBe` AppError
-  => e `OO.CouldBe` GenericError
-  => MonadResource m
-  => HasEnv r
-  => r
-  -> URI
-  -> m LBS.ByteString
-getS3Uri envAws uri = do
-  AWS.S3Uri b k <- OO.throwLeftM $ uriToS3Uri (reslashUri uri)
-  handleAwsError $ runAws envAws $ AWS.unsafeDownload b k
-
-uriToS3Uri :: URI -> Either GenericError S3Uri
-uriToS3Uri uri = case fromText @S3Uri (tshow uri) of
-  Right s3Uri -> Right s3Uri
-  Left msg    -> Left . GenericError $ "Unable to parse URI" <> tshow msg
 
 readResource :: ()
   => HasEnv r
@@ -122,9 +83,9 @@ readResource envAws maxRetries = \case
       then liftIO $ LBS.readFile path
       else OO.throwM NotFound
   Uri uri -> retryS3 maxRetries $ case uri ^. the @"uriScheme" of
-    "s3:"     -> getS3Uri envAws (reslashUri uri)
-    "http:"   -> readHttpUri (reslashUri uri)
-    "https:"  -> readHttpUri (reslashUri uri)
+    "s3:"     -> S3.getS3Uri envAws (URI.reslashUri uri)
+    "http:"   -> readHttpUri (URI.reslashUri uri)
+    "https:"  -> readHttpUri (URI.reslashUri uri)
     scheme    -> OO.throwM (GenericError ("Unrecognised uri scheme: " <> T.pack scheme))
 
 readFirstAvailableResource :: ()
@@ -173,46 +134,9 @@ resourceExists envAws = \case
             resourceExists envAws (Local target)
           else return False
   Uri uri       -> case uri ^. the @"uriScheme" of
-    "s3:"   -> OO.suspendM runResourceT $ (True <$ headS3Uri envAws (reslashUri uri)) & OO.catchM @AppError (pure . const False) & OO.catchM @GenericError (pure . const False)
-    "http:" ->                            (True <$ headHttpUri      (reslashUri uri)) & OO.catchM @AppError (pure . const False) & OO.catchM @GenericError (pure . const False)
+    "s3:"   -> OO.suspendM runResourceT $ (True <$ S3.headS3Uri envAws (URI.reslashUri uri)) & OO.catchM @AppError (pure . const False) & OO.catchM @GenericError (pure . const False)
+    "http:" ->                            (True <$ headHttpUri         (URI.reslashUri uri)) & OO.catchM @AppError (pure . const False) & OO.catchM @GenericError (pure . const False)
     _scheme -> return False
-
-headS3Uri :: ()
-  => MonadError (OO.Variant e) m
-  => MonadCatch m
-  => e `OO.CouldBe` AppError
-  => e `OO.CouldBe` GenericError
-  => MonadResource m
-  => HasEnv r
-  => r
-  -> URI
-  -> m AWS.HeadObjectResponse
-headS3Uri envAws uri = do
-  AWS.S3Uri b k <- OO.throwLeftM $ uriToS3Uri (reslashUri uri)
-  handleAwsError $ runAws envAws $ AWS.send $ AWS.headObject b k
-
-uploadToS3 :: ()
-  => e `OO.CouldBe` AppError
-  => e `OO.CouldBe` GenericError
-  => MonadCatch m
-  => MonadUnliftIO m
-  => HasEnv r
-  => AWS.ToBody a
-  => r
-  -> URI
-  -> a
-  -> ExceptT (OO.Variant e) m ()
-uploadToS3 envAws uri lbs = do
-  AWS.S3Uri b k <- OO.throwLeftM $ uriToS3Uri (reslashUri uri)
-  let req = AWS.toBody lbs
-  let po  = AWS.putObject b k req
-  handleAwsError $ void $ OO.suspendM runResourceT $ runAws envAws $ AWS.send po
-
-reslashUri :: URI -> URI
-reslashUri uri = uri & the @"uriPath" %~ fmap reslashChar
-  where reslashChar :: Char -> Char
-        reslashChar '\\' = '/'
-        reslashChar c    = c
 
 writeResource :: ()
   => e `OO.CouldBe` AppError
@@ -229,7 +153,7 @@ writeResource :: ()
 writeResource envAws loc maxRetries lbs = case loc of
   Local path -> liftIO (LBS.writeFile path lbs) >> return ()
   Uri uri -> retryS3 maxRetries $ case uri ^. the @"uriScheme" of
-    "s3:"   -> uploadToS3 envAws (reslashUri uri) lbs
+    "s3:"   -> S3.putObject envAws (URI.reslashUri uri) lbs
     "http:" -> OO.throwM $ GenericError "HTTP PUT method not supported"
     scheme  -> OO.throwM $ GenericError ("Unrecognised uri scheme: " <> T.pack scheme)
 
@@ -240,25 +164,6 @@ createLocalDirectoryIfMissing = \case
     "s3:"   -> return ()
     "http:" -> return ()
     _scheme -> return ()
-
-copyS3Uri :: ()
-  => HasEnv r
-  => MonadUnliftIO m
-  => e `OO.CouldBe` AppError
-  => e `OO.CouldBe` GenericError
-  => r
-  -> URI
-  -> URI
-  -> ExceptT (OO.Variant e) m ()
-copyS3Uri envAws source target = do
-  AWS.S3Uri sourceBucket sourceObjectKey <- OO.throwLeftM $ uriToS3Uri (reslashUri source)
-  AWS.S3Uri targetBucket targetObjectKey <- OO.throwLeftM $ uriToS3Uri (reslashUri target)
-  let copyObjectRequest = AWS.copyObject targetBucket (toText sourceBucket <> "/" <> toText sourceObjectKey) targetObjectKey
-  response <- OO.suspendM runResourceT (runAws envAws $ AWS.send copyObjectRequest)
-  let responseCode = response ^. AWS.corsResponseStatus
-  unless (200 <= responseCode && responseCode < 300) do
-    liftIO $ CIO.hPutStrLn IO.stderr $ "Error in S3 copy: " <> tshow response
-    OO.throwM RetriesFailedAppError
 
 retryOnE :: forall e e' m a. ()
   => Monad m
@@ -339,7 +244,7 @@ linkOrCopyResource envAws source target = case source of
   Uri sourceUri -> case target of
     Local _targetPath -> OO.throwM $ GenericError "Can't copy between different file backends"
     Uri targetUri    -> case (sourceUri ^. the @"uriScheme", targetUri ^. the @"uriScheme") of
-      ("s3:", "s3:")               -> retryUnless @AppError ((== Just 301) . appErrorStatus) 3 (copyS3Uri envAws (reslashUri sourceUri) (reslashUri targetUri))
+      ("s3:", "s3:")               -> retryUnless @AppError ((== Just 301) . appErrorStatus) 3 (S3.copyS3Uri envAws (URI.reslashUri sourceUri) (URI.reslashUri targetUri))
       ("http:", "http:")           -> OO.throwM $ GenericError "Link and copy unsupported for http backend"
       (sourceScheme, targetScheme) -> OO.throwM $ GenericError $ "Unsupported backend combination: " <> T.pack sourceScheme <> " to " <> T.pack targetScheme
 
@@ -353,7 +258,7 @@ readHttpUri :: ()
   -> m LBS.ByteString
 readHttpUri httpUri = handleHttpError do
   manager <- liftIO $ HTTP.newManager HTTPS.tlsManagerSettings
-  request <- liftIO $ HTTP.parseUrlThrow (T.unpack ("GET " <> tshow (reslashUri httpUri)))
+  request <- liftIO $ HTTP.parseUrlThrow (T.unpack ("GET " <> tshow (URI.reslashUri httpUri)))
   response <- liftIO $ HTTP.httpLbs request manager
 
   return $ HTTP.responseBody response
@@ -368,7 +273,7 @@ headHttpUri :: ()
   -> m LBS.ByteString
 headHttpUri httpUri = handleHttpError do
   manager <- liftIO $ HTTP.newManager HTTP.defaultManagerSettings
-  request <- liftIO $ HTTP.parseUrlThrow (T.unpack ("HEAD " <> tshow (reslashUri httpUri)))
+  request <- liftIO $ HTTP.parseUrlThrow (T.unpack ("HEAD " <> tshow (URI.reslashUri httpUri)))
   response <- liftIO $ HTTP.httpLbs request manager
 
   return $ HTTP.responseBody response
