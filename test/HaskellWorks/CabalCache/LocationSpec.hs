@@ -4,7 +4,6 @@ module HaskellWorks.CabalCache.LocationSpec
   ( spec,
   ) where
 
-import Antiope.Core                     (toText)
 import Data.Maybe                       (fromJust)
 import HaskellWorks.CabalCache.Location
 import HaskellWorks.Hspec.Hedgehog
@@ -12,13 +11,14 @@ import Hedgehog
 import Network.URI                      (URI)
 import Test.Hspec
 
-import qualified Data.List       as L
-import qualified Data.List       as List
-import qualified Data.Text       as Text
-import qualified Hedgehog.Gen    as Gen
-import qualified Hedgehog.Range  as Range
-import qualified Network.URI     as URI
-import qualified System.FilePath as FP
+import qualified Data.List        as L
+import qualified Data.List        as List
+import qualified Data.Text        as Text
+import qualified Hedgehog.Gen     as Gen
+import qualified Hedgehog.Range   as Range
+import qualified Network.AWS.Data as AWS
+import qualified Network.URI      as URI
+import qualified System.FilePath  as FP
 
 {- HLINT ignore "Redundant do"        -}
 {- HLINT ignore "Reduce duplication"  -}
@@ -48,20 +48,20 @@ spec = describe "HaskellWorks.Assist.LocationSpec" do
 
   it "S3 should roundtrip from and to text" $ require $ property do
     uri <- forAll s3Uri
-    tripping (Uri uri) toText toLocation
+    tripping (Uri uri) AWS.toText toLocation
 
   it "LocalLocation should roundtrip from and to text" $ require $ property do
     path <- forAll localPath
-    tripping (Local path) toText toLocation
+    tripping (Local path) AWS.toText toLocation
 
   it "Should append s3 path" $ require $ property do
     loc  <- Uri <$> forAll s3Uri
     part <- forAll $ Gen.text (Range.linear 3 10) Gen.alphaNum
     ext  <- forAll $ Gen.text (Range.linear 2 4)  Gen.alphaNum
-    toText (loc </> part <.> ext) === toText loc <> "/" <> part <> "." <> ext
+    AWS.toText (loc </> part <.> ext) === AWS.toText loc <> "/" <> part <> "." <> ext
 
   it "Should append s3 path" $ require $ property do
     loc  <- Local <$> forAll localPath
     part <- forAll $ Gen.string (Range.linear 3 10) Gen.alphaNum
     ext  <- forAll $ Gen.string (Range.linear 2 4)  Gen.alphaNum
-    toText (loc </> Text.pack part <.> Text.pack ext) === Text.pack ((Text.unpack $ toText loc) FP.</> part FP.<.> ext)
+    AWS.toText (loc </> Text.pack part <.> Text.pack ext) === Text.pack ((Text.unpack $ AWS.toText loc) FP.</> part FP.<.> ext)

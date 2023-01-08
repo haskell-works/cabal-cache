@@ -7,7 +7,6 @@ module App.Commands.Plan
   ( cmdPlan,
   ) where
 
-import Antiope.Core                     (toText)
 import App.Commands.Options.Types       (PlanOptions (PlanOptions))
 import Control.Applicative              (optional)
 import Control.Lens                     ((<&>), (&), (^.), (%~), Each(each))
@@ -31,6 +30,7 @@ import qualified Data.Text                          as T
 import qualified HaskellWorks.CabalCache.Core       as Z
 import qualified HaskellWorks.CabalCache.Hash       as H
 import qualified HaskellWorks.CabalCache.IO.Console as CIO
+import qualified Network.AWS.Data                   as AWS
 import qualified Options.Applicative                as OA
 import qualified System.IO                          as IO
 
@@ -46,7 +46,7 @@ runPlan opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
   let versionedArchiveUris  = archiveUris & each %~ (</> archiveVersion)
   let outputFile            = opts ^. the @"outputFile"
 
-  CIO.putStrLn $ "Store path: "       <> toText storePath
+  CIO.putStrLn $ "Store path: "       <> AWS.toText storePath
   CIO.putStrLn $ "Store path hash: "  <> T.pack storePathHash
   CIO.putStrLn $ "Archive URIs: "     <> tshow archiveUris
   CIO.putStrLn $ "Archive version: "  <> archiveVersion
@@ -69,8 +69,8 @@ runPlan opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
     return $ archiveFiles <> scopedArchiveFiles
 
   if outputFile == "-"
-    then liftIO $ LBS.putStr $ J.encode (fmap (fmap toText) plan)
-    else liftIO $ LBS.writeFile outputFile $ J.encode (fmap (fmap toText) plan)
+    then liftIO $ LBS.putStr $ J.encode (fmap (fmap AWS.toText) plan)
+    else liftIO $ LBS.writeFile outputFile $ J.encode (fmap (fmap AWS.toText) plan)
 
 optsPlan :: Parser PlanOptions
 optsPlan = PlanOptions

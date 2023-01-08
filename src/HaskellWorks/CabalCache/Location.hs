@@ -12,19 +12,20 @@ module HaskellWorks.CabalCache.Location
 )
 where
 
-import Antiope.Core                 (ToText (..))
-import Antiope.S3                   (ObjectKey (..), S3Uri (..))
-import Control.Lens                 ((&), (%~))
-import Data.Generics.Product.Any    (HasAny(the))
-import Data.Maybe                   (fromMaybe)
-import Data.Text                    (Text)
-import GHC.Generics                 (Generic)
-import HaskellWorks.CabalCache.Show (tshow)
-import Network.URI                  (URI)
+import Control.Lens                       ((&), (%~))
+import Data.Generics.Product.Any          (HasAny(the))
+import Data.Maybe                         (fromMaybe)
+import Data.Text                          (Text)
+import GHC.Generics                       (Generic)
+import HaskellWorks.CabalCache.AWS.S3.URI (S3Uri (..))
+import HaskellWorks.CabalCache.Show       (tshow)
+import Network.URI                        (URI)
 
-import qualified Data.Text       as T
-import qualified Network.URI     as URI
-import qualified System.FilePath as FP
+import qualified Data.Text        as T
+import qualified Network.AWS.Data as AWS
+import qualified Network.AWS.S3   as AWS
+import qualified Network.URI      as URI
+import qualified System.FilePath  as FP
 
 class IsPath a s | a -> s where
   (</>) :: a -> s -> a
@@ -38,7 +39,7 @@ data Location
   | Local FilePath
   deriving (Show, Eq, Generic)
 
-instance ToText Location where
+instance AWS.ToText Location where
   toText (Uri uri) = tshow uri
   toText (Local p) = T.pack p
 
@@ -62,11 +63,11 @@ instance (a ~ Char) => IsPath [a] [a] where
   b <.> e = b FP.<.> e
 
 instance IsPath S3Uri Text where
-  S3Uri b (ObjectKey k) </> p =
-    S3Uri b (ObjectKey (stripEnd "/" k <> "/" <> stripStart "/" p))
+  S3Uri b (AWS.ObjectKey k) </> p =
+    S3Uri b (AWS.ObjectKey (stripEnd "/" k <> "/" <> stripStart "/" p))
 
-  S3Uri b (ObjectKey k) <.> e =
-    S3Uri b (ObjectKey (stripEnd "." k <> "." <> stripStart "." e))
+  S3Uri b (AWS.ObjectKey k) <.> e =
+    S3Uri b (AWS.ObjectKey (stripEnd "." k <> "." <> stripStart "." e))
 
 toLocation :: Text -> Maybe Location
 toLocation t = case URI.parseURI (T.unpack t) of

@@ -8,8 +8,6 @@ module HaskellWorks.CabalCache.AwsSpec
   ( spec
   ) where
 
-import Antiope.Core
-import Antiope.Env
 import Control.Lens
 import Control.Monad
 import Control.Monad.Except             (runExceptT)
@@ -20,14 +18,16 @@ import HaskellWorks.Hspec.Hedgehog
 import Hedgehog
 import Test.Hspec
 
-import qualified Control.Monad.Oops             as OO
-import qualified Data.ByteString.Lazy.Char8     as LBSC
-import qualified Data.Variant                   as OO
-import qualified HaskellWorks.CabalCache.AWS.S3 as AWS
-import qualified Hedgehog                       as H
-import qualified Network.HTTP.Types             as HTTP
-import qualified Network.URI                    as URI
-import qualified System.Environment             as IO
+import qualified Control.Monad.Oops               as OO
+import qualified Data.ByteString.Lazy.Char8       as LBSC
+import qualified Data.Variant                     as OO
+import qualified HaskellWorks.CabalCache.AWS.Env  as AWS
+import qualified HaskellWorks.CabalCache.AWS.S3   as AWS
+import qualified Hedgehog                         as H
+import qualified Network.AWS                      as AWS
+import qualified Network.HTTP.Types               as HTTP
+import qualified Network.URI                      as URI
+import qualified System.Environment               as IO
 
 {- HLINT ignore "Redundant do"        -}
 {- HLINT ignore "Reduce duplication"  -}
@@ -38,10 +38,10 @@ spec = describe "HaskellWorks.CabalCache.QuerySpec" do
   it "stub" $ requireTest do
     ci <- liftIO $ IO.lookupEnv "CI" <&> isJust
     unless ci do
-      envAws <- liftIO $ mkEnv Oregon (const LBSC.putStrLn)
+      envAws <- liftIO $ AWS.mkEnv AWS.Oregon (const LBSC.putStrLn)
       let Just uri = URI.parseURI "s3://jky-mayhem/hjddhd"
       result :: Either (OO.Variant '[AppError, GenericError]) ()
-        <- liftIO $ runExceptT $ OO.suspendM runResourceT $ void (AWS.headS3Uri envAws uri)
+        <- liftIO $ runExceptT $ OO.suspendM AWS.runResourceT $ void (AWS.headS3Uri envAws uri)
 
       case result of
         Right _ -> H.failure

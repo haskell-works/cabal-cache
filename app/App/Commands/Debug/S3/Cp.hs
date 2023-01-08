@@ -7,9 +7,6 @@ module App.Commands.Debug.S3.Cp
   ( cmdCp,
   ) where
 
-import Antiope.Core                     (Region (..))
-import Antiope.Env                      (mkEnv)
-import Antiope.Options.Applicative      (autoText)
 import App.Commands.Options.Parser      (text)
 import App.Commands.Options.Types       (CpOptions (CpOptions))
 import Control.Applicative              (Alternative(..), optional)
@@ -23,14 +20,17 @@ import HaskellWorks.CabalCache.AppError (AppError(..), GenericError(..), display
 import HaskellWorks.CabalCache.Error    (ExitFailure(..))
 import Network.URI                      (parseURI)
 
-import qualified App.Commands.Options.Types                       as Z
-import qualified Control.Monad.Oops                               as OO
-import qualified HaskellWorks.CabalCache.AWS.Env                  as AWS
-import qualified HaskellWorks.CabalCache.AWS.S3                   as AWS
-import qualified HaskellWorks.CabalCache.IO.Console               as CIO
-import qualified Options.Applicative                              as OA
-import qualified System.IO                                        as IO
-import qualified System.IO.Unsafe                                 as IO
+import qualified App.Commands.Options.Types         as Z
+import qualified Control.Monad.Oops                 as OO
+import qualified Data.Text                          as T
+import qualified HaskellWorks.CabalCache.AWS.Env    as AWS
+import qualified HaskellWorks.CabalCache.AWS.S3     as AWS
+import qualified HaskellWorks.CabalCache.IO.Console as CIO
+import qualified Network.AWS                        as AWS
+import qualified Network.AWS.Data                   as AWS
+import qualified Options.Applicative                as OA
+import qualified System.IO                          as IO
+import qualified System.IO.Unsafe                   as IO
 
 {- HLINT ignore "Monoid law, left identity" -}
 {- HLINT ignore "Reduce duplication"        -}
@@ -47,7 +47,7 @@ runCp opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
     envAws <- liftIO $ IO.unsafeInterleaveIO $ (<&> envOverride .~ Dual (Endo $ \s -> case hostEndpoint of
       Just (hostname, port, ssl) -> setEndpoint ssl hostname port s
       Nothing -> s))
-      $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
+      $ AWS.mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
 
     AWS.copyS3Uri envAws srcUri dstUri
       & do OO.catchM @AppError \e -> do
@@ -61,7 +61,7 @@ optsCp = CpOptions
       (  OA.long "region"
       <> OA.metavar "AWS_REGION"
       <> OA.showDefault
-      <> OA.value Oregon
+      <> OA.value AWS.Oregon
       <> OA.help "The AWS region in which to operate"
       )
   <*> OA.option (OA.maybeReader parseURI)
@@ -75,7 +75,7 @@ optsCp = CpOptions
       <>  OA.metavar "S3_URI"
       )
   <*> optional
-      ( OA.option autoText
+      ( OA.option (OA.eitherReader (AWS.fromText . T.pack))
         (   OA.long "aws-log-level"
         <>  OA.help "AWS Log Level.  One of (Error, Info, Debug, Trace)"
         <>  OA.metavar "AWS_LOG_LEVEL"
@@ -86,7 +86,7 @@ optsCp = CpOptions
 parseEndpoint :: OA.Parser (ByteString, Int, Bool)
 parseEndpoint =
   (,,)
-  <$> OA.option autoText
+  <$> OA.option (OA.eitherReader (AWS.fromText . T.pack))
         (   OA.long "host-name-override"
         <>  OA.help "Override the host name (default: s3.amazonaws.com)"
         <>  OA.metavar "HOST_NAME"
