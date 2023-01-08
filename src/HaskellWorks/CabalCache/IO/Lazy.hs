@@ -28,7 +28,7 @@ import Control.Monad.Trans.Except       (ExceptT(..))
 import Control.Monad.Trans.Resource     (MonadResource, runResourceT, MonadUnliftIO)
 import Data.Functor.Identity            (Identity(..))
 import Data.Generics.Product.Any        (HasAny(the))
-import HaskellWorks.CabalCache.AppError (AppError(..), appErrorStatus)
+import HaskellWorks.CabalCache.AppError (AppError(..), NotFound(..), appErrorStatus)
 import HaskellWorks.CabalCache.Location (Location (..))
 import HaskellWorks.CabalCache.Show     (tshow)
 import Network.AWS                      (HasEnv)
@@ -106,6 +106,7 @@ readResource :: ()
   => MonadResource m
   => MonadCatch m
   => e `OO.CouldBe` AppError
+  => e `OO.CouldBe` NotFound
   => r
   -> Int
   -> Location
@@ -127,6 +128,7 @@ readFirstAvailableResource :: ()
   => MonadResource m
   => MonadCatch m
   => e `OO.CouldBe` AppError
+  => e `OO.CouldBe` NotFound
   => t
   -> [Location]
   -> Int

@@ -25,7 +25,7 @@ import Data.Generics.Product.Any        (the)
 import Data.Maybe                       (fromMaybe)
 import Data.Monoid                      (Dual(Dual), Endo(Endo))
 import Data.Text                        (Text)
-import HaskellWorks.CabalCache.AppError (displayAppError, AppError)
+import HaskellWorks.CabalCache.AppError (displayAppError, AppError, NotFound)
 import HaskellWorks.CabalCache.Error    (ExitFailure(..))
 import HaskellWorks.CabalCache.IO.Lazy  (readFirstAvailableResource)
 import HaskellWorks.CabalCache.Location (toLocation, (<.>), (</>))
@@ -172,6 +172,9 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
             (existingArchiveFileContents, existingArchiveFile) <- readFirstAvailableResource envAws locations maxRetries
               & do OO.catchM @AppError \e -> do
                     CIO.putStrLn $ "Unable to download any of: " <> tshow locations <> " because: " <> displayAppError e
+                    DQ.fail
+              & do OO.catchM @NotFound \_ -> do
+                    CIO.putStrLn $ "Not found: " <> tshow locations
                     DQ.fail
 
             CIO.putStrLn $ "Extracting: " <> toText existingArchiveFile

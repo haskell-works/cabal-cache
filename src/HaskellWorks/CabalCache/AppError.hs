@@ -3,6 +3,7 @@
 
 module HaskellWorks.CabalCache.AppError
   ( AppError(..),
+    NotFound(..),
     displayAppError,
     appErrorStatus,
   ) where
@@ -15,6 +16,8 @@ import HaskellWorks.CabalCache.Show (tshow)
 import qualified Data.Text          as T
 import qualified Network.HTTP.Types as HTTP
 
+data NotFound = NotFound deriving (Eq, Show, Generic)
+
 data AppError
   = AwsAppError
     { status :: HTTP.Status
@@ -23,7 +26,6 @@ data AppError
     { status :: HTTP.Status
     }
   | RetriesFailedAppError
-  | NotFound
   | GenericAppError Text
   deriving (Eq, Show, Generic)
 
@@ -34,7 +36,6 @@ displayAppError :: AppError -> Text
 displayAppError (AwsAppError s)       = tshow s
 displayAppError (HttpAppError s)      = tshow s
 displayAppError RetriesFailedAppError = "Multiple retries failed"
-displayAppError NotFound              = "Not found"
 displayAppError (GenericAppError msg) = msg
 
 appErrorStatus :: AppError -> Maybe Int
