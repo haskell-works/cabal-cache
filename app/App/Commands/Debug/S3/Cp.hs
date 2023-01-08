@@ -17,7 +17,7 @@ import Data.ByteString                  (ByteString)
 import Data.Generics.Product.Any        (the)
 import Data.Monoid                      (Dual(Dual), Endo(Endo))
 import HaskellWorks.CabalCache.AppError (AppError(..), displayAppError)
-import HaskellWorks.CabalCache.Error    (ExitFailure(..), GenericError(..), displayGenericError)
+import HaskellWorks.CabalCache.Error    (CopyFailed(..), ExitFailure(..), GenericError(..), displayGenericError)
 import Network.URI                      (parseURI)
 
 import qualified App.Commands.Options.Types         as Z
@@ -54,6 +54,8 @@ runCp opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
             CIO.hPutStrLn IO.stderr $ "Copy failed: " <> displayAppError e
       & do OO.catchM @GenericError \e -> do
             CIO.hPutStrLn IO.stderr $ "Copy failed: " <> displayGenericError e
+      & do OO.catchM @CopyFailed \CopyFailed -> do
+            CIO.hPutStrLn IO.stderr $ "Copy failed"
 
 optsCp :: OA.Parser CpOptions
 optsCp = CpOptions

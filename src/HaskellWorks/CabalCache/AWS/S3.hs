@@ -19,7 +19,7 @@ import Control.Monad.Trans.Except         (ExceptT(..))
 import Control.Monad.Trans.Resource       (MonadResource, MonadUnliftIO, liftResourceT, runResourceT)
 import Data.Conduit.Lazy                  (lazyConsume)
 import HaskellWorks.CabalCache.AppError   (AppError(..))
-import HaskellWorks.CabalCache.Error      (GenericError(..))
+import HaskellWorks.CabalCache.Error      (CopyFailed(..), GenericError(..))
 import HaskellWorks.CabalCache.Show       (tshow)
 import Network.AWS                        (MonadAWS, HasEnv)
 import Network.AWS.Data                   (ToText(..), fromText)
@@ -107,6 +107,7 @@ copyS3Uri :: ()
   => HasEnv r
   => MonadUnliftIO m
   => e `OO.CouldBe` AppError
+  => e `OO.CouldBe` CopyFailed
   => e `OO.CouldBe` GenericError
   => r
   -> URI
@@ -120,4 +121,4 @@ copyS3Uri envAws source target = do
   let responseCode = response ^. AWS.corsResponseStatus
   unless (200 <= responseCode && responseCode < 300) do
     liftIO $ CIO.hPutStrLn IO.stderr $ "Error in S3 copy: " <> tshow response
-    OO.throwM RetriesFailedAppError
+    OO.throwM CopyFailed

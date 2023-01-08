@@ -3,6 +3,7 @@
 
 module HaskellWorks.CabalCache.Error
   ( ExitFailure(..),
+    CopyFailed(..),
     GenericError(..),
     NotFound(..),
     displayGenericError,
@@ -11,7 +12,9 @@ module HaskellWorks.CabalCache.Error
 import Data.Text    (Text)
 import GHC.Generics (Generic)
 
-data ExitFailure = ExitFailure
+data ExitFailure = ExitFailure deriving (Eq, Show, Generic)
+
+data CopyFailed = CopyFailed deriving (Eq, Show, Generic)
 
 data GenericError = GenericError Text deriving (Eq, Show, Generic)
 

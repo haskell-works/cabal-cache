@@ -20,13 +20,11 @@ data AppError
   | HttpAppError
     { status :: HTTP.Status
     }
-  | RetriesFailedAppError
   deriving (Eq, Show, Generic)
 
 displayAppError :: AppError -> Text
 displayAppError (AwsAppError s)       = tshow s
 displayAppError (HttpAppError s)      = tshow s
-displayAppError RetriesFailedAppError = "Multiple retries failed"
 
 appErrorStatus :: AppError -> Maybe Int
 appErrorStatus (AwsAppError (HTTP.Status statusCode _)) = Just statusCode

@@ -26,7 +26,7 @@ import Control.Monad.Trans.Resource     (MonadResource, runResourceT, MonadUnlif
 import Data.Functor.Identity            (Identity(..))
 import Data.Generics.Product.Any        (HasAny(the))
 import HaskellWorks.CabalCache.AppError (AppError(..), appErrorStatus)
-import HaskellWorks.CabalCache.Error    (GenericError(..), NotFound(..))
+import HaskellWorks.CabalCache.Error    (CopyFailed(..), GenericError(..), NotFound(..))
 import HaskellWorks.CabalCache.Location (Location (..))
 import HaskellWorks.CabalCache.Show     (tshow)
 import Network.AWS                      (HasEnv)
@@ -230,6 +230,7 @@ linkOrCopyResource :: ()
   => HasEnv r
   => MonadUnliftIO m
   => e `OO.CouldBe` AppError
+  => e `OO.CouldBe` CopyFailed
   => e `OO.CouldBe` GenericError
   => r
   -> Location
