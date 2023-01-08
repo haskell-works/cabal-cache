@@ -91,6 +91,7 @@ library
                         antiope-core,
                         antiope-s3,
                         bytestring,
+                        conduit-extra,
                         containers,
                         cryptonite,
                         deepseq,
@@ -118,6 +119,8 @@ library
   hs-source-dirs:       src
   exposed-modules:      HaskellWorks.CabalCache.AppError
                         HaskellWorks.CabalCache.AWS.Env
+                        HaskellWorks.CabalCache.AWS.Error
+                        HaskellWorks.CabalCache.AWS.S3
                         HaskellWorks.CabalCache.Concurrent.DownloadQueue
                         HaskellWorks.CabalCache.Concurrent.Fork
                         HaskellWorks.CabalCache.Concurrent.Type
@@ -138,6 +141,7 @@ library
                         HaskellWorks.CabalCache.Text
                         HaskellWorks.CabalCache.Topology
                         HaskellWorks.CabalCache.Types
+                        HaskellWorks.CabalCache.URI
                         HaskellWorks.CabalCache.Version
 
 executable cabal-cache

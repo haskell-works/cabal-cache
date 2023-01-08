@@ -21,12 +21,12 @@ import Data.Generics.Product.Any        (the)
 import Data.Monoid                      (Dual(Dual), Endo(Endo))
 import HaskellWorks.CabalCache.AppError (AppError(..), GenericError(..), displayAppError, displayGenericError)
 import HaskellWorks.CabalCache.Error    (ExitFailure(..))
-import HaskellWorks.CabalCache.IO.Lazy  (copyS3Uri)
 import Network.URI                      (parseURI)
 
 import qualified App.Commands.Options.Types                       as Z
 import qualified Control.Monad.Oops                               as OO
 import qualified HaskellWorks.CabalCache.AWS.Env                  as AWS
+import qualified HaskellWorks.CabalCache.AWS.S3                   as AWS
 import qualified HaskellWorks.CabalCache.IO.Console               as CIO
 import qualified Options.Applicative                              as OA
 import qualified System.IO                                        as IO
@@ -49,7 +49,7 @@ runCp opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
       Nothing -> s))
       $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
 
-    copyS3Uri envAws srcUri dstUri
+    AWS.copyS3Uri envAws srcUri dstUri
       & do OO.catchM @AppError \e -> do
             CIO.hPutStrLn IO.stderr $ "Copy failed: " <> displayAppError e
       & do OO.catchM @GenericError \e -> do
