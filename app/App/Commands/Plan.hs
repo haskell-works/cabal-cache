@@ -103,4 +103,4 @@ optsPlan = PlanOptions
       )
 
 cmdPlan :: Mod CommandFields (IO ())
-cmdPlan = OA.command "plan"  $ flip OA.info OA.idm $ runPlan <$> optsPlan
+cmdPlan = OA.command "plan" $ flip OA.info OA.idm $ runPlan <$> optsPlan
