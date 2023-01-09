@@ -6,7 +6,7 @@ module HaskellWorks.CabalCache.AWS.Error
 
 import Control.Monad.Catch              (MonadCatch(..), MonadThrow(throwM))
 import Control.Monad.Except             (MonadError(..))
-import HaskellWorks.CabalCache.AppError (AppError(..))
+import HaskellWorks.CabalCache.AppError (AwsError(..))
 
 import qualified Control.Monad.Oops                   as OO
 import qualified Network.AWS                          as AWS
@@ -19,10 +19,10 @@ import qualified Network.HTTP.Types                   as HTTP
 handleAwsError :: ()
   => MonadCatch m
   => MonadError (OO.Variant e) m
-  => e `OO.CouldBe` AppError
+  => e `OO.CouldBe` AwsError
   => m a
   -> m a
 handleAwsError f = catch f $ \(e :: AWS.Error) ->
   case e of
-    (AWS.ServiceError (AWS.ServiceError' _ s@(HTTP.Status _ _) _ _ _ _)) -> OO.throwM $ AwsAppError s
+    (AWS.ServiceError (AWS.ServiceError' _ s@(HTTP.Status _ _) _ _ _ _)) -> OO.throwM $ AwsError s
     _                                                                    -> throwM e

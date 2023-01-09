@@ -21,7 +21,7 @@ import Data.List                        ((\\))
 import Data.Maybe                       (fromMaybe)
 import Data.Monoid                      (Dual(Dual), Endo(Endo))
 import Data.Text                        (Text)
-import HaskellWorks.CabalCache.AppError (AppError, displayAppError)
+import HaskellWorks.CabalCache.AppError (AwsError, HttpError (..), displayAwsError, displayHttpError)
 import HaskellWorks.CabalCache.Error    (ExitFailure(..), GenericError, displayGenericError)
 import HaskellWorks.CabalCache.Location (Location (..), toLocation, (<.>), (</>))
 import HaskellWorks.CabalCache.Metadata (createMetadata)
@@ -87,9 +87,6 @@ runSyncToArchive opts = do
     CIO.putStrLn $ "AWS Log level: "    <> tshow awsLogLevel
 
     planJson <- Z.loadPlan (opts ^. the @"path" </> opts ^. the @"buildPath")
-      & do OO.catchM @AppError \e -> do
-            CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError e
-            OO.throwM ExitFailure
       & do OO.catchM @GenericError \e -> do
             CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayGenericError e
             OO.throwM ExitFailure
@@ -159,7 +156,7 @@ runSyncToArchive opts = do
               metas <- createMetadata tempPath pInfo [("store-path", LC8.pack storePath)]
 
               IO.createTar tempArchiveFile (rp2 <> [metas])
-                & do OO.catchM @AppError \_ -> do
+                & do OO.catchM @AwsError \_ -> do
                       CIO.hPutStrLn IO.stderr $ "Unable tar " <> tshow tempArchiveFile
                       OO.throwM WorkSkipped
                 & do OO.catchM @GenericError \_ -> do
@@ -167,11 +164,17 @@ runSyncToArchive opts = do
                       OO.throwM WorkSkipped
 
               (liftIO (LBS.readFile tempArchiveFile) >>= IO.writeResource envAws targetFile maxRetries)
-                & do OO.catchM @AppError \e -> do
+                & do OO.catchM @AwsError \e -> do
                       CIO.hPutStrLn IO.stderr $ mempty
                         <> "ERROR: No write access to archive uris: "
                         <> tshow (fmap AWS.toText [scopedArchiveFile, archiveFile])
-                        <> " " <> displayAppError e
+                        <> " " <> displayAwsError e
+                      OO.throwM WorkFatal
+                & do OO.catchM @HttpError \e -> do
+                      CIO.hPutStrLn IO.stderr $ mempty
+                        <> "ERROR: No write access to archive uris: "
+                        <> tshow (fmap AWS.toText [scopedArchiveFile, archiveFile])
+                        <> " " <> displayHttpError e
                       OO.throwM WorkFatal
                 & do OO.catchM @GenericError \e -> do
                       CIO.hPutStrLn IO.stderr $ mempty

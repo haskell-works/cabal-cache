@@ -25,7 +25,7 @@ import Control.Monad.Trans.Except       (ExceptT(..))
 import Control.Monad.Trans.Resource     (MonadResource, runResourceT, MonadUnliftIO)
 import Data.Functor.Identity            (Identity(..))
 import Data.Generics.Product.Any        (HasAny(the))
-import HaskellWorks.CabalCache.AppError (AppError(..), appErrorStatus)
+import HaskellWorks.CabalCache.AppError (AwsError(..), HttpError(..), statusCodeOf)
 import HaskellWorks.CabalCache.Error    (CopyFailed(..), GenericError(..), NotFound(..))
 import HaskellWorks.CabalCache.Location (Location (..))
 import HaskellWorks.CabalCache.Show     (tshow)
@@ -53,7 +53,7 @@ import qualified System.IO.Error                      as IO
 handleHttpError :: ()
   => MonadError (OO.Variant e) m
   => MonadCatch m
-  => e `OO.CouldBe` AppError
+  => e `OO.CouldBe` HttpError
   => e `OO.CouldBe` GenericError
   => MonadIO m
   => Monad m
@@ -62,7 +62,7 @@ handleHttpError :: ()
 handleHttpError f = catch f $ \(e :: HTTP.HttpException) ->
   case e of
     (HTTP.HttpExceptionRequest _ e') -> case e' of
-      HTTP.StatusCodeException resp _ -> OO.throwM (HttpAppError (resp & HTTP.responseStatus))
+      HTTP.StatusCodeException resp _ -> OO.throwM (HttpError (resp & HTTP.responseStatus))
       _                               -> OO.throwM (GenericError (tshow e'))
     _                                 -> liftIO $ throwM e
 
@@ -70,7 +70,8 @@ readResource :: ()
   => HasEnv r
   => MonadResource m
   => MonadCatch m
-  => e `OO.CouldBe` AppError
+  => e `OO.CouldBe` AwsError
+  => e `OO.CouldBe` HttpError
   => e `OO.CouldBe` NotFound
   => e `OO.CouldBe` GenericError
   => r
@@ -93,7 +94,8 @@ readFirstAvailableResource :: ()
   => HasEnv t
   => MonadResource m
   => MonadCatch m
-  => e `OO.CouldBe` AppError
+  => e `OO.CouldBe` AwsError
+  => e `OO.CouldBe` HttpError
   => e `OO.CouldBe` NotFound
   => e `OO.CouldBe` GenericError
   => t
@@ -103,10 +105,14 @@ readFirstAvailableResource :: ()
 readFirstAvailableResource _ [] _ = OO.throwM $ GenericError "No resources specified in read"
 readFirstAvailableResource envAws (a:as) maxRetries = do
   (, a) <$> readResource envAws maxRetries a
-    & OO.catchM @AppError \e -> do
-        if null as
-          then OO.throwFM (Identity e)
-          else readFirstAvailableResource envAws as maxRetries
+    & do OO.catchM @AwsError \e -> do
+          if null as
+            then OO.throwFM (Identity e)
+            else readFirstAvailableResource envAws as maxRetries
+    & do OO.catchM @HttpError \e -> do
+          if null as
+            then OO.throwFM (Identity e)
+            else readFirstAvailableResource envAws as maxRetries
 
 safePathIsSymbolLink :: FilePath -> IO Bool
 safePathIsSymbolLink filePath = catch (IO.pathIsSymbolicLink filePath) handler
@@ -135,12 +141,13 @@ resourceExists envAws = \case
             resourceExists envAws (Local target)
           else return False
   Uri uri       -> case uri ^. the @"uriScheme" of
-    "s3:"   -> OO.suspendM runResourceT $ (True <$ S3.headS3Uri envAws (URI.reslashUri uri)) & OO.catchM @AppError (pure . const False) & OO.catchM @GenericError (pure . const False)
-    "http:" ->                            (True <$ headHttpUri         (URI.reslashUri uri)) & OO.catchM @AppError (pure . const False) & OO.catchM @GenericError (pure . const False)
+    "s3:"   -> OO.suspendM runResourceT $ (True <$ S3.headS3Uri envAws (URI.reslashUri uri)) & OO.catchM @AwsError (pure . const False) & OO.catchM @HttpError (pure . const False) & OO.catchM @GenericError (pure . const False)
+    "http:" ->                            (True <$ headHttpUri         (URI.reslashUri uri)) & OO.catchM @AwsError (pure . const False) & OO.catchM @HttpError (pure . const False) & OO.catchM @GenericError (pure . const False)
     _scheme -> return False
 
 writeResource :: ()
-  => e `OO.CouldBe` AppError
+  => e `OO.CouldBe` AwsError
+  => e `OO.CouldBe` HttpError
   => e `OO.CouldBe` GenericError
   => MonadIO m
   => MonadCatch m
@@ -209,16 +216,14 @@ retryUnless p = retryWhen (not . p)
 
 retryS3 :: ()
   => MonadIO m
-  => e `OO.CouldBe` AppError
+  => e `OO.CouldBe` AwsError
   => Int
   -> ExceptT (OO.Variant e) m a
   -> ExceptT (OO.Variant e) m a
 retryS3 maxRetries a = do
   retryWhen retryPredicate maxRetries a
- where
-  retryPredicate appe = case appErrorStatus appe of
-                          Just i   -> i `elem` retryableHTTPStatuses
-                          Nothing  -> False
+  where retryPredicate :: AwsError -> Bool
+        retryPredicate e = statusCodeOf e `elem` retryableHTTPStatuses
 
   -- https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html#ErrorCodeList
   -- https://stackoverflow.com/a/51770411/2976251
@@ -229,7 +234,7 @@ retryableHTTPStatuses = [408, 409, 425, 426, 502, 503, 504]
 linkOrCopyResource :: ()
   => HasEnv r
   => MonadUnliftIO m
-  => e `OO.CouldBe` AppError
+  => e `OO.CouldBe` AwsError
   => e `OO.CouldBe` CopyFailed
   => e `OO.CouldBe` GenericError
   => r
@@ -246,14 +251,14 @@ linkOrCopyResource envAws source target = case source of
   Uri sourceUri -> case target of
     Local _targetPath -> OO.throwM $ GenericError "Can't copy between different file backends"
     Uri targetUri    -> case (sourceUri ^. the @"uriScheme", targetUri ^. the @"uriScheme") of
-      ("s3:", "s3:")               -> retryUnless @AppError ((== Just 301) . appErrorStatus) 3 (S3.copyS3Uri envAws (URI.reslashUri sourceUri) (URI.reslashUri targetUri))
+      ("s3:", "s3:")               -> retryUnless @AwsError ((== 301) . statusCodeOf) 3 (S3.copyS3Uri envAws (URI.reslashUri sourceUri) (URI.reslashUri targetUri))
       ("http:", "http:")           -> OO.throwM $ GenericError "Link and copy unsupported for http backend"
       (sourceScheme, targetScheme) -> OO.throwM $ GenericError $ "Unsupported backend combination: " <> T.pack sourceScheme <> " to " <> T.pack targetScheme
 
 readHttpUri :: ()
   => MonadError (OO.Variant e) m
   => MonadCatch m
-  => e `OO.CouldBe` AppError
+  => e `OO.CouldBe` HttpError
   => e `OO.CouldBe` GenericError
   => MonadIO m
   => URI
@@ -268,7 +273,7 @@ readHttpUri httpUri = handleHttpError do
 headHttpUri :: ()
   => MonadError (OO.Variant e) m
   => MonadCatch m
-  => e `OO.CouldBe` AppError
+  => e `OO.CouldBe` HttpError
   => e `OO.CouldBe` GenericError
   => MonadIO m
   =>URI
@@ -281,7 +286,6 @@ headHttpUri httpUri = handleHttpError do
   return $ HTTP.responseBody response
 
 removePathRecursive :: ()
-  => e `OO.CouldBe` AppError
   => e `OO.CouldBe` GenericError
   => MonadCatch m
   => MonadIO m

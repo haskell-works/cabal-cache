@@ -22,7 +22,7 @@ import Data.Generics.Product.Any        (the)
 import Data.Maybe                       (fromMaybe)
 import Data.Monoid                      (Dual(Dual), Endo(Endo))
 import Data.Text                        (Text)
-import HaskellWorks.CabalCache.AppError (AppError, displayAppError)
+import HaskellWorks.CabalCache.AppError (AwsError, HttpError (..), displayAwsError, displayHttpError)
 import HaskellWorks.CabalCache.Error    (ExitFailure(..), GenericError, NotFound, displayGenericError)
 import HaskellWorks.CabalCache.IO.Lazy  (readFirstAvailableResource)
 import HaskellWorks.CabalCache.Location (toLocation, (<.>), (</>))
@@ -90,9 +90,6 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
 
   OO.catchAndExitFailureM @ExitFailure do
     planJson <- Z.loadPlan (opts ^. the @"path" </> opts ^. the @"buildPath")
-      & do OO.catchM @AppError \e -> do
-            CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError e
-            OO.throwM ExitFailure
       & do OO.catchM @GenericError \e -> do
             CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayGenericError e
             OO.throwM ExitFailure
@@ -172,8 +169,11 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
             let locations = foldMap L.tuple2ToList (L.zip archiveFiles scopedArchiveFiles)
 
             (existingArchiveFileContents, existingArchiveFile) <- readFirstAvailableResource envAws locations maxRetries
-              & do OO.catchM @AppError \e -> do
-                    CIO.putStrLn $ "Unable to download any of: " <> tshow locations <> " because: " <> displayAppError e
+              & do OO.catchM @AwsError \e -> do
+                    CIO.putStrLn $ "Unable to download any of: " <> tshow locations <> " because: " <> displayAwsError e
+                    DQ.fail
+              & do OO.catchM @HttpError \e -> do
+                    CIO.putStrLn $ "Unable to download any of: " <> tshow locations <> " because: " <> displayHttpError e
                     DQ.fail
               & do OO.catchM @NotFound \_ -> do
                     CIO.putStrLn $ "Not found: " <> tshow locations
@@ -188,8 +188,8 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
             liftIO $ LBS.writeFile tempArchiveFile existingArchiveFileContents
 
             IO.extractTar tempArchiveFile storePath
-              & do OO.catchM @AppError \e -> do
-                    CIO.putStrLn $ "Unable to extract tar at " <> tshow tempArchiveFile <> " because: " <> displayAppError e
+              & do OO.catchM @AwsError \e -> do
+                    CIO.putStrLn $ "Unable to extract tar at " <> tshow tempArchiveFile <> " because: " <> displayAwsError e
                     DQ.fail
               & do OO.catchM @GenericError \e -> do
                     CIO.putStrLn $ "Unable to extract tar at " <> tshow tempArchiveFile <> " because: " <> displayGenericError e
@@ -225,8 +225,6 @@ ensureStorePathCleanup packageStorePath =
     case downloadStatus of
       DQ.DownloadFailure -> do
         M.cleanupStorePath packageStorePath
-          & do OO.catchM @AppError \e -> do
-                CIO.hPutStrLn IO.stderr $ "Failed to cleanup store path: " <> displayAppError e
           & do OO.catchM @GenericError \e -> do
                 CIO.hPutStrLn IO.stderr $ "Failed to cleanup store path: " <> displayGenericError e
       DQ.DownloadSuccess ->

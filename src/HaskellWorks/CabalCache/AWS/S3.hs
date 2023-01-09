@@ -18,7 +18,7 @@ import Control.Monad.Trans.AWS            (RsBody)
 import Control.Monad.Trans.Except         (ExceptT(..))
 import Control.Monad.Trans.Resource       (MonadResource, MonadUnliftIO, liftResourceT, runResourceT)
 import Data.Conduit.Lazy                  (lazyConsume)
-import HaskellWorks.CabalCache.AppError   (AppError(..))
+import HaskellWorks.CabalCache.AppError   (AwsError(..))
 import HaskellWorks.CabalCache.Error      (CopyFailed(..), GenericError(..))
 import HaskellWorks.CabalCache.Show       (tshow)
 import Network.AWS                        (MonadAWS, HasEnv)
@@ -61,7 +61,7 @@ uriToS3Uri uri = case fromText @AWS.S3Uri (tshow uri) of
 headS3Uri :: ()
   => MonadError (OO.Variant e) m
   => MonadCatch m
-  => e `OO.CouldBe` AppError
+  => e `OO.CouldBe` AwsError
   => e `OO.CouldBe` GenericError
   => MonadResource m
   => HasEnv r
@@ -73,7 +73,7 @@ headS3Uri envAws uri = do
   AWS.handleAwsError $ AWS.runAWS envAws $ AWS.send $ AWS.headObject b k
 
 putObject :: ()
-  => e `OO.CouldBe` AppError
+  => e `OO.CouldBe` AwsError
   => e `OO.CouldBe` GenericError
   => MonadCatch m
   => MonadUnliftIO m
@@ -92,7 +92,7 @@ putObject envAws uri lbs = do
 getS3Uri :: ()
   => MonadError (OO.Variant e) m
   => MonadCatch m
-  => e `OO.CouldBe` AppError
+  => e `OO.CouldBe` AwsError
   => e `OO.CouldBe` GenericError
   => MonadResource m
   => HasEnv r
@@ -106,7 +106,7 @@ getS3Uri envAws uri = do
 copyS3Uri :: ()
   => HasEnv r
   => MonadUnliftIO m
-  => e `OO.CouldBe` AppError
+  => e `OO.CouldBe` AwsError
   => e `OO.CouldBe` CopyFailed
   => e `OO.CouldBe` GenericError
   => r

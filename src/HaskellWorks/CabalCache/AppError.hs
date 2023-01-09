@@ -1,10 +1,13 @@
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE OverloadedStrings     #-}
 
 module HaskellWorks.CabalCache.AppError
-  ( AppError(..),
-    displayAppError,
-    appErrorStatus,
+  ( AwsError(..),
+    HttpError(..),
+    HasStatusCode(..),
+    displayAwsError,
+    displayHttpError,
   ) where
 
 import Data.Text                    (Text)
@@ -13,19 +16,27 @@ import HaskellWorks.CabalCache.Show (tshow)
 
 import qualified Network.HTTP.Types as HTTP
 
-data AppError
-  = AwsAppError
-    { status :: HTTP.Status
-    }
-  | HttpAppError
-    { status :: HTTP.Status
-    }
+newtype AwsError = AwsError
+  { status :: HTTP.Status
+  }
   deriving (Eq, Show, Generic)
 
-displayAppError :: AppError -> Text
-displayAppError (AwsAppError s)       = tshow s
-displayAppError (HttpAppError s)      = tshow s
+newtype HttpError = HttpError
+  { status :: HTTP.Status
+  }
+  deriving (Eq, Show, Generic)
 
-appErrorStatus :: AppError -> Maybe Int
-appErrorStatus (AwsAppError (HTTP.Status statusCode _)) = Just statusCode
-appErrorStatus _                                        = Nothing
+displayAwsError :: AwsError -> Text
+displayAwsError (AwsError s) = tshow s
+
+displayHttpError :: HttpError -> Text
+displayHttpError (HttpError s) = tshow s
+
+class HasStatusCode a where
+  statusCodeOf :: a -> Int
+
+instance HasStatusCode AwsError where
+  statusCodeOf (AwsError (HTTP.Status c _)) = c
+
+instance HasStatusCode HttpError where
+  statusCodeOf (HttpError (HTTP.Status c _)) = c
