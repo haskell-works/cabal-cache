@@ -14,7 +14,8 @@ import GHC.Generics                     (Generic)
 import HaskellWorks.CabalCache.Location (Location)
 import Network.URI                      (URI)
 
-import qualified Network.AWS as AWS
+import qualified Data.List.NonEmpty as NEL
+import qualified Network.AWS        as AWS
 
 data CpOptions = CpOptions
   { region        :: AWS.Region
@@ -47,7 +48,7 @@ data PlanOptions = PlanOptions
 
 data SyncFromArchiveOptions = SyncFromArchiveOptions
   { region        :: AWS.Region
-  , archiveUris   :: [Location]
+  , archiveUris   :: NEL.NonEmpty Location
   , path          :: FilePath
   , buildPath     :: FilePath
   , storePath     :: FilePath

@@ -25,6 +25,7 @@ import Control.Monad.Trans.Except       (ExceptT(..))
 import Control.Monad.Trans.Resource     (MonadResource, runResourceT, MonadUnliftIO)
 import Data.Functor.Identity            (Identity(..))
 import Data.Generics.Product.Any        (HasAny(the))
+import Data.List.NonEmpty               (NonEmpty ((:|)))
 import HaskellWorks.CabalCache.AppError (AwsError(..), HttpError(..), statusCodeOf)
 import HaskellWorks.CabalCache.Error    (CopyFailed(..), GenericError(..), InvalidUrl(..), NotFound(..))
 import HaskellWorks.CabalCache.Location (Location (..))
@@ -35,6 +36,7 @@ import Network.URI                      (URI)
 import qualified Control.Concurrent                   as IO
 import qualified Control.Monad.Oops                   as OO
 import qualified Data.ByteString.Lazy                 as LBS
+import qualified Data.List.NonEmpty                   as NEL
 import qualified Data.Text                            as T
 import qualified HaskellWorks.CabalCache.AWS.S3       as S3
 import qualified HaskellWorks.CabalCache.IO.Console   as CIO
@@ -45,6 +47,7 @@ import qualified System.Directory                     as IO
 import qualified System.FilePath.Posix                as FP
 import qualified System.IO                            as IO
 import qualified System.IO.Error                      as IO
+
 
 {- HLINT ignore "Redundant do"        -}
 {- HLINT ignore "Reduce duplication"  -}
@@ -99,20 +102,19 @@ readFirstAvailableResource :: ()
   => e `OO.CouldBe` InvalidUrl
   => e `OO.CouldBe` NotFound
   => t
-  -> [Location]
+  -> NonEmpty Location
   -> Int
   -> ExceptT (OO.Variant e) m (LBS.ByteString, Location)
-readFirstAvailableResource _ [] _ = OO.throwM $ GenericError "No resources specified in read"
-readFirstAvailableResource envAws (a:as) maxRetries = do
+readFirstAvailableResource envAws (a:|as) maxRetries = do
   (, a) <$> readResource envAws maxRetries a
     & do OO.catchM @AwsError \e -> do
-          if null as
-            then OO.throwFM (Identity e)
-            else readFirstAvailableResource envAws as maxRetries
+          case NEL.nonEmpty as of
+            Nothing -> OO.throwFM (Identity e)
+            Just nas -> readFirstAvailableResource envAws nas maxRetries
     & do OO.catchM @HttpError \e -> do
-          if null as
-            then OO.throwFM (Identity e)
-            else readFirstAvailableResource envAws as maxRetries
+          case NEL.nonEmpty as of
+            Nothing -> OO.throwFM (Identity e)
+            Just nas -> readFirstAvailableResource envAws nas maxRetries
 
 safePathIsSymbolLink :: FilePath -> IO Bool
 safePathIsSymbolLink filePath = catch (IO.pathIsSymbolicLink filePath) handler
