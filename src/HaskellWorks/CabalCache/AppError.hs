@@ -6,6 +6,7 @@ module HaskellWorks.CabalCache.AppError
   ( AwsError(..),
     HttpError(..),
     HasStatusCode(..),
+    HasMaybeStatusCode(..),
     displayAwsError,
     displayHttpError,
   ) where
@@ -24,7 +25,7 @@ newtype AwsError = AwsError
 
 data HttpError = HttpError
   { reasponse :: HTTP.Request
-  , status :: HTTP.Status
+  , content    :: HTTP.HttpExceptionContent
   }
   deriving (Show, Generic)
 
@@ -37,8 +38,16 @@ displayHttpError (HttpError _ s) = tshow s
 class HasStatusCode a where
   statusCodeOf :: a -> Int
 
+class HasMaybeStatusCode a where
+  maybeStatusCodeOf :: a -> Maybe Int
+
 instance HasStatusCode AwsError where
   statusCodeOf (AwsError (HTTP.Status c _)) = c
 
-instance HasStatusCode HttpError where
-  statusCodeOf (HttpError response (HTTP.Status c _)) = c
+instance HasMaybeStatusCode AwsError where
+  maybeStatusCodeOf (AwsError (HTTP.Status c _)) = Just c
+
+instance HasMaybeStatusCode HttpError where
+  maybeStatusCodeOf (HttpError _ content') = case content' of
+    HTTP.StatusCodeException response _ -> let HTTP.Status c _ = HTTP.responseStatus response in Just c
+    _ -> Nothing

@@ -61,9 +61,7 @@ handleHttpError :: ()
   -> m a
 handleHttpError f = catch f $ \(e :: HTTP.HttpException) ->
   case e of
-    (HTTP.HttpExceptionRequest request e') -> case e' of
-      HTTP.StatusCodeException resp _     -> OO.throwM $ HttpError request (resp & HTTP.responseStatus)
-      -- TODO
+    HTTP.HttpExceptionRequest request content' -> OO.throwM $ HttpError request content'
     HTTP.InvalidUrlException url' reason' -> OO.throwM $ InvalidUrl (tshow url') (tshow reason')
 
 readResource :: ()
