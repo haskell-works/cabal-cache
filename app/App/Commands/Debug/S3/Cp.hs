@@ -17,7 +17,7 @@ import Data.ByteString                  (ByteString)
 import Data.Generics.Product.Any        (the)
 import Data.Monoid                      (Dual(Dual), Endo(Endo))
 import HaskellWorks.CabalCache.AppError (AwsError(..), displayAwsError)
-import HaskellWorks.CabalCache.Error    (CopyFailed(..), ExitFailure(..), GenericError(..), UnsupportedUri, displayGenericError)
+import HaskellWorks.CabalCache.Error    (CopyFailed(..), ExitFailure(..), UnsupportedUri)
 import HaskellWorks.CabalCache.Show     (tshow)
 import Network.URI                      (parseURI)
 
@@ -53,8 +53,6 @@ runCp opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
     AWS.copyS3Uri envAws srcUri dstUri
       & do OO.catchM @AwsError \e -> do
             CIO.hPutStrLn IO.stderr $ "Copy failed: " <> displayAwsError e
-      & do OO.catchM @GenericError \e -> do
-            CIO.hPutStrLn IO.stderr $ "Copy failed: " <> displayGenericError e
       & do OO.catchM @CopyFailed \CopyFailed -> do
             CIO.hPutStrLn IO.stderr $ "Copy failed"
       & do OO.catchM @UnsupportedUri \e -> do

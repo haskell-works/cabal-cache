@@ -25,7 +25,7 @@ import Data.Maybe                       (fromMaybe)
 import Data.Monoid                      (Dual(Dual), Endo(Endo))
 import Data.Text                        (Text)
 import HaskellWorks.CabalCache.AppError (AwsError, HttpError (..), displayAwsError, displayHttpError)
-import HaskellWorks.CabalCache.Error    (DecodeError(..), ExitFailure(..), GenericError, InvalidUrl(..), NotFound, UnsupportedUri(..), displayGenericError)
+import HaskellWorks.CabalCache.Error    (DecodeError(..), ExitFailure(..), InvalidUrl(..), NotFound, UnsupportedUri(..))
 import HaskellWorks.CabalCache.IO.Lazy  (readFirstAvailableResource)
 import HaskellWorks.CabalCache.IO.Tar   (ArchiveError(..))
 import HaskellWorks.CabalCache.Location (toLocation, (<.>), (</>), Location)
@@ -186,9 +186,6 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
               & do OO.catchM @InvalidUrl \(InvalidUrl url' reason') -> do
                     CIO.hPutStrLn IO.stderr $ "Invalid URL: " <> tshow url' <> ", " <> reason'
                     DQ.fail
-              & do OO.catchM @GenericError \e -> do
-                    CIO.hPutStrLn IO.stderr $ displayGenericError e
-                    DQ.fail
               & do OO.catchM @UnsupportedUri \e -> do
                     CIO.hPutStrLn IO.stderr $ tshow e
                     DQ.fail
@@ -231,10 +228,7 @@ ensureStorePathCleanup :: ()
 ensureStorePathCleanup packageStorePath = 
   OO.snatchM @DQ.DownloadStatus \downloadStatus -> do
     case downloadStatus of
-      DQ.DownloadFailure -> do
-        M.cleanupStorePath packageStorePath
-          & do OO.catchM @GenericError \e -> do
-                CIO.hPutStrLn IO.stderr $ "Failed to cleanup store path: " <> displayGenericError e
+      DQ.DownloadFailure -> M.cleanupStorePath packageStorePath
       DQ.DownloadSuccess ->
         CIO.hPutStrLn IO.stdout $ "Successfully cleaned up store path: " <> tshow packageStorePath
     OO.throwM downloadStatus

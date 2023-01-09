@@ -27,7 +27,7 @@ import Data.Functor.Identity            (Identity(..))
 import Data.Generics.Product.Any        (HasAny(the))
 import Data.List.NonEmpty               (NonEmpty ((:|)))
 import HaskellWorks.CabalCache.AppError (AwsError(..), HttpError(..), statusCodeOf)
-import HaskellWorks.CabalCache.Error    (CopyFailed(..), GenericError(..), InvalidUrl(..), NotFound(..), NotImplemented(..), UnsupportedUri(..))
+import HaskellWorks.CabalCache.Error    (CopyFailed(..), InvalidUrl(..), NotFound(..), NotImplemented(..), UnsupportedUri(..))
 import HaskellWorks.CabalCache.Location (Location (..))
 import HaskellWorks.CabalCache.Show     (tshow)
 import Network.AWS                      (HasEnv)
@@ -72,7 +72,6 @@ readResource :: ()
   => MonadResource m
   => MonadCatch m
   => e `OO.CouldBe` AwsError
-  => e `OO.CouldBe` GenericError
   => e `OO.CouldBe` UnsupportedUri
   => e `OO.CouldBe` HttpError
   => e `OO.CouldBe` InvalidUrl
@@ -98,7 +97,6 @@ readFirstAvailableResource :: ()
   => MonadResource m
   => MonadCatch m
   => e `OO.CouldBe` AwsError
-  => e `OO.CouldBe` GenericError
   => e `OO.CouldBe` HttpError
   => e `OO.CouldBe` InvalidUrl
   => e `OO.CouldBe` NotFound
@@ -151,7 +149,6 @@ resourceExists envAws = \case
       OO.suspendM runResourceT $ (True <$ S3.headS3Uri envAws (URI.reslashUri uri))
         & OO.catchM @AwsError (pure . const False)
         & OO.catchM @HttpError (pure . const False)
-        & OO.catchM @GenericError (pure . const False)
     "http:" -> do
       (True <$ headHttpUri (URI.reslashUri uri))
         & OO.catchM @AwsError (pure . const False)
@@ -161,7 +158,6 @@ resourceExists envAws = \case
 writeResource :: ()
   => e `OO.CouldBe` AwsError
   => e `OO.CouldBe` HttpError
-  => e `OO.CouldBe` GenericError
   => e `OO.CouldBe` NotImplemented
   => e `OO.CouldBe` UnsupportedUri
   => MonadIO m
@@ -251,7 +247,6 @@ linkOrCopyResource :: ()
   => MonadUnliftIO m
   => e `OO.CouldBe` AwsError
   => e `OO.CouldBe` CopyFailed
-  => e `OO.CouldBe` GenericError
   => e `OO.CouldBe` NotImplemented
   => e `OO.CouldBe` UnsupportedUri
   => r

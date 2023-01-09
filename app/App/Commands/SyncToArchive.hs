@@ -22,7 +22,7 @@ import Data.Maybe                       (fromMaybe)
 import Data.Monoid                      (Dual(Dual), Endo(Endo))
 import Data.Text                        (Text)
 import HaskellWorks.CabalCache.AppError (AwsError, HttpError (..), displayAwsError, displayHttpError)
-import HaskellWorks.CabalCache.Error    (DecodeError, ExitFailure(..), GenericError(..), InvalidUrl(..), NotImplemented(..), UnsupportedUri(..), displayGenericError)
+import HaskellWorks.CabalCache.Error    (DecodeError, ExitFailure(..), InvalidUrl(..), NotImplemented(..), UnsupportedUri(..))
 import HaskellWorks.CabalCache.Location (Location (..), toLocation, (<.>), (</>))
 import HaskellWorks.CabalCache.IO.Tar   (ArchiveError)
 import HaskellWorks.CabalCache.Metadata (createMetadata)
@@ -179,12 +179,6 @@ runSyncToArchive opts = do
                         <> "ERROR: No write access to archive uris: "
                         <> tshow (fmap AWS.toText [scopedArchiveFile, archiveFile])
                         <> " " <> displayHttpError e
-                      OO.throwM WorkFatal
-                & do OO.catchM @GenericError \e -> do
-                      CIO.hPutStrLn IO.stderr $ mempty
-                        <> "ERROR: No write access to archive uris: "
-                        <> tshow (fmap AWS.toText [scopedArchiveFile, archiveFile])
-                        <> " " <> displayGenericError e
                       OO.throwM WorkFatal
                 & do OO.catchM @NotImplemented \e -> do
                       CIO.hPutStrLn IO.stderr $ mempty
