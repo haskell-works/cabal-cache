@@ -14,6 +14,7 @@ import Data.Text                    (Text)
 import GHC.Generics                 (Generic)
 import HaskellWorks.CabalCache.Show (tshow)
 
+import qualified Network.HTTP.Client as HTTP
 import qualified Network.HTTP.Types as HTTP
 
 newtype AwsError = AwsError
@@ -21,16 +22,17 @@ newtype AwsError = AwsError
   }
   deriving (Eq, Show, Generic)
 
-newtype HttpError = HttpError
-  { status :: HTTP.Status
+data HttpError = HttpError
+  { reasponse :: HTTP.Request
+  , status :: HTTP.Status
   }
-  deriving (Eq, Show, Generic)
+  deriving (Show, Generic)
 
 displayAwsError :: AwsError -> Text
 displayAwsError (AwsError s) = tshow s
 
 displayHttpError :: HttpError -> Text
-displayHttpError (HttpError s) = tshow s
+displayHttpError (HttpError _ s) = tshow s
 
 class HasStatusCode a where
   statusCodeOf :: a -> Int
@@ -39,4 +41,4 @@ instance HasStatusCode AwsError where
   statusCodeOf (AwsError (HTTP.Status c _)) = c
 
 instance HasStatusCode HttpError where
-  statusCodeOf (HttpError (HTTP.Status c _)) = c
+  statusCodeOf (HttpError response (HTTP.Status c _)) = c

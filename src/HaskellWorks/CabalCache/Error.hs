@@ -1,10 +1,12 @@
-{-# LANGUAGE DeriveGeneric       #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 
 module HaskellWorks.CabalCache.Error
   ( ExitFailure(..),
     CopyFailed(..),
     GenericError(..),
+    InvalidUrl(..),
     NotFound(..),
     displayGenericError,
   ) where
@@ -17,6 +19,11 @@ data ExitFailure = ExitFailure deriving (Eq, Show, Generic)
 data CopyFailed = CopyFailed deriving (Eq, Show, Generic)
 
 data GenericError = GenericError Text deriving (Eq, Show, Generic)
+
+data InvalidUrl = InvalidUrl
+  { url    :: Text
+  , reason :: Text
+  } deriving (Eq, Show, Generic)
 
 data NotFound = NotFound deriving (Eq, Show, Generic)
 

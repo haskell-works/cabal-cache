@@ -22,7 +22,7 @@ import Data.Maybe                       (fromMaybe)
 import Data.Monoid                      (Dual(Dual), Endo(Endo))
 import Data.Text                        (Text)
 import HaskellWorks.CabalCache.AppError (AwsError, HttpError (..), displayAwsError, displayHttpError)
-import HaskellWorks.CabalCache.Error    (ExitFailure(..), GenericError, displayGenericError)
+import HaskellWorks.CabalCache.Error    (ExitFailure(..), GenericError, InvalidUrl(..), displayGenericError)
 import HaskellWorks.CabalCache.Location (Location (..), toLocation, (<.>), (</>))
 import HaskellWorks.CabalCache.Metadata (createMetadata)
 import HaskellWorks.CabalCache.Show     (tshow)
@@ -139,6 +139,9 @@ runSyncToArchive opts = do
           let targetFile = if canShare planData (Z.packageId pInfo) then archiveFile else scopedArchiveFile
 
           archiveFileExists <- IO.resourceExists envAws targetFile
+            & do OO.catchM @InvalidUrl \(InvalidUrl url' reason') -> do
+                  CIO.hPutStrLn IO.stderr $ "Invalid URL: " <> tshow url' <> ", " <> reason'
+                  OO.throwM WorkSkipped
 
           unless archiveFileExists do
             packageStorePathExists <- liftIO $ doesDirectoryExist packageStorePath

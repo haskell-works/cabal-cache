@@ -19,14 +19,14 @@ module HaskellWorks.CabalCache.IO.Lazy
 
 import Control.Lens                     ((&), (^.))
 import Control.Monad                    (unless)
-import Control.Monad.Catch              (MonadCatch(..), MonadThrow(throwM))
+import Control.Monad.Catch              (MonadCatch(..))
 import Control.Monad.Except             (MonadIO(..), MonadError(..))
 import Control.Monad.Trans.Except       (ExceptT(..))
 import Control.Monad.Trans.Resource     (MonadResource, runResourceT, MonadUnliftIO)
 import Data.Functor.Identity            (Identity(..))
 import Data.Generics.Product.Any        (HasAny(the))
 import HaskellWorks.CabalCache.AppError (AwsError(..), HttpError(..), statusCodeOf)
-import HaskellWorks.CabalCache.Error    (CopyFailed(..), GenericError(..), NotFound(..))
+import HaskellWorks.CabalCache.Error    (CopyFailed(..), GenericError(..), InvalidUrl(..), NotFound(..))
 import HaskellWorks.CabalCache.Location (Location (..))
 import HaskellWorks.CabalCache.Show     (tshow)
 import Network.AWS                      (HasEnv)
@@ -54,26 +54,27 @@ handleHttpError :: ()
   => MonadError (OO.Variant e) m
   => MonadCatch m
   => e `OO.CouldBe` HttpError
-  => e `OO.CouldBe` GenericError
+  => e `OO.CouldBe` InvalidUrl
   => MonadIO m
   => Monad m
   => m a
   -> m a
 handleHttpError f = catch f $ \(e :: HTTP.HttpException) ->
   case e of
-    (HTTP.HttpExceptionRequest _ e') -> case e' of
-      HTTP.StatusCodeException resp _ -> OO.throwM (HttpError (resp & HTTP.responseStatus))
-      _                               -> OO.throwM (GenericError (tshow e'))
-    _                                 -> liftIO $ throwM e
+    (HTTP.HttpExceptionRequest request e') -> case e' of
+      HTTP.StatusCodeException resp _     -> OO.throwM $ HttpError request (resp & HTTP.responseStatus)
+      -- TODO
+    HTTP.InvalidUrlException url' reason' -> OO.throwM $ InvalidUrl (tshow url') (tshow reason')
 
 readResource :: ()
   => HasEnv r
   => MonadResource m
   => MonadCatch m
   => e `OO.CouldBe` AwsError
-  => e `OO.CouldBe` HttpError
-  => e `OO.CouldBe` NotFound
   => e `OO.CouldBe` GenericError
+  => e `OO.CouldBe` HttpError
+  => e `OO.CouldBe` InvalidUrl
+  => e `OO.CouldBe` NotFound
   => r
   -> Int
   -> Location
@@ -95,9 +96,10 @@ readFirstAvailableResource :: ()
   => MonadResource m
   => MonadCatch m
   => e `OO.CouldBe` AwsError
-  => e `OO.CouldBe` HttpError
-  => e `OO.CouldBe` NotFound
   => e `OO.CouldBe` GenericError
+  => e `OO.CouldBe` HttpError
+  => e `OO.CouldBe` InvalidUrl
+  => e `OO.CouldBe` NotFound
   => t
   -> [Location]
   -> Int
@@ -125,6 +127,7 @@ resourceExists :: ()
   => MonadUnliftIO m
   => MonadCatch m
   => HasEnv r
+  => e `OO.CouldBe` InvalidUrl
   => r
   -> Location
   -> ExceptT (OO.Variant e) m Bool
@@ -140,9 +143,16 @@ resourceExists envAws = \case
             target <- liftIO $ IO.getSymbolicLinkTarget path
             resourceExists envAws (Local target)
           else return False
-  Uri uri       -> case uri ^. the @"uriScheme" of
-    "s3:"   -> OO.suspendM runResourceT $ (True <$ S3.headS3Uri envAws (URI.reslashUri uri)) & OO.catchM @AwsError (pure . const False) & OO.catchM @HttpError (pure . const False) & OO.catchM @GenericError (pure . const False)
-    "http:" ->                            (True <$ headHttpUri         (URI.reslashUri uri)) & OO.catchM @AwsError (pure . const False) & OO.catchM @HttpError (pure . const False) & OO.catchM @GenericError (pure . const False)
+  Uri uri -> case uri ^. the @"uriScheme" of
+    "s3:" -> do
+      OO.suspendM runResourceT $ (True <$ S3.headS3Uri envAws (URI.reslashUri uri))
+        & OO.catchM @AwsError (pure . const False)
+        & OO.catchM @HttpError (pure . const False)
+        & OO.catchM @GenericError (pure . const False)
+    "http:" -> do
+      (True <$ headHttpUri (URI.reslashUri uri))
+        & OO.catchM @AwsError (pure . const False)
+        & OO.catchM @HttpError (pure . const False)
     _scheme -> return False
 
 writeResource :: ()
@@ -259,7 +269,7 @@ readHttpUri :: ()
   => MonadError (OO.Variant e) m
   => MonadCatch m
   => e `OO.CouldBe` HttpError
-  => e `OO.CouldBe` GenericError
+  => e `OO.CouldBe` InvalidUrl
   => MonadIO m
   => URI
   -> m LBS.ByteString
@@ -274,9 +284,9 @@ headHttpUri :: ()
   => MonadError (OO.Variant e) m
   => MonadCatch m
   => e `OO.CouldBe` HttpError
-  => e `OO.CouldBe` GenericError
+  => e `OO.CouldBe` InvalidUrl
   => MonadIO m
-  =>URI
+  => URI
   -> m LBS.ByteString
 headHttpUri httpUri = handleHttpError do
   manager <- liftIO $ HTTP.newManager HTTP.defaultManagerSettings
