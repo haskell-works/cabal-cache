@@ -17,7 +17,8 @@ import Data.ByteString                  (ByteString)
 import Data.Generics.Product.Any        (the)
 import Data.Monoid                      (Dual(Dual), Endo(Endo))
 import HaskellWorks.CabalCache.AppError (AwsError(..), displayAwsError)
-import HaskellWorks.CabalCache.Error    (CopyFailed(..), ExitFailure(..), GenericError(..), displayGenericError)
+import HaskellWorks.CabalCache.Error    (CopyFailed(..), ExitFailure(..), GenericError(..), UnsupportedUri, displayGenericError)
+import HaskellWorks.CabalCache.Show     (tshow)
 import Network.URI                      (parseURI)
 
 import qualified App.Commands.Options.Types         as Z
@@ -56,6 +57,8 @@ runCp opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
             CIO.hPutStrLn IO.stderr $ "Copy failed: " <> displayGenericError e
       & do OO.catchM @CopyFailed \CopyFailed -> do
             CIO.hPutStrLn IO.stderr $ "Copy failed"
+      & do OO.catchM @UnsupportedUri \e -> do
+            CIO.hPutStrLn IO.stderr $ "Unsupported uri: " <> tshow e
 
 optsCp :: OA.Parser CpOptions
 optsCp = CpOptions

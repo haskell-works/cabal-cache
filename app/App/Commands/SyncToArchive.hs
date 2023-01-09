@@ -22,7 +22,7 @@ import Data.Maybe                       (fromMaybe)
 import Data.Monoid                      (Dual(Dual), Endo(Endo))
 import Data.Text                        (Text)
 import HaskellWorks.CabalCache.AppError (AwsError, HttpError (..), displayAwsError, displayHttpError)
-import HaskellWorks.CabalCache.Error    (ExitFailure(..), GenericError, InvalidUrl(..), displayGenericError)
+import HaskellWorks.CabalCache.Error    (ExitFailure(..), GenericError, InvalidUrl(..), UnsupportedUri(..), displayGenericError)
 import HaskellWorks.CabalCache.Location (Location (..), toLocation, (<.>), (</>))
 import HaskellWorks.CabalCache.IO.Tar   (ArchiveError)
 import HaskellWorks.CabalCache.Metadata (createMetadata)
@@ -143,6 +143,9 @@ runSyncToArchive opts = do
             & do OO.catchM @InvalidUrl \(InvalidUrl url' reason') -> do
                   CIO.hPutStrLn IO.stderr $ "Invalid URL: " <> tshow url' <> ", " <> reason'
                   OO.throwM WorkSkipped
+            & do OO.catchM @UnsupportedUri \e -> do
+                  CIO.hPutStrLn IO.stderr $ "Unsupported URI: " <> tshow e
+                  OO.throwM WorkSkipped
 
           unless archiveFileExists do
             packageStorePathExists <- liftIO $ doesDirectoryExist packageStorePath
@@ -182,6 +185,12 @@ runSyncToArchive opts = do
                         <> "ERROR: No write access to archive uris: "
                         <> tshow (fmap AWS.toText [scopedArchiveFile, archiveFile])
                         <> " " <> displayGenericError e
+                      OO.throwM WorkFatal
+                & do OO.catchM @UnsupportedUri \e -> do
+                      CIO.hPutStrLn IO.stderr $ mempty
+                        <> "Unsupported URI: "
+                        <> tshow (fmap AWS.toText [scopedArchiveFile, archiveFile])
+                        <> ": " <> tshow e
                       OO.throwM WorkFatal
               
     return ()

@@ -25,7 +25,7 @@ import Data.Maybe                       (fromMaybe)
 import Data.Monoid                      (Dual(Dual), Endo(Endo))
 import Data.Text                        (Text)
 import HaskellWorks.CabalCache.AppError (AwsError, HttpError (..), displayAwsError, displayHttpError)
-import HaskellWorks.CabalCache.Error    (ExitFailure(..), GenericError, InvalidUrl(..), NotFound, displayGenericError)
+import HaskellWorks.CabalCache.Error    (ExitFailure(..), GenericError, InvalidUrl(..), UnsupportedUri(..), NotFound, displayGenericError)
 import HaskellWorks.CabalCache.IO.Lazy  (readFirstAvailableResource)
 import HaskellWorks.CabalCache.IO.Tar   (ArchiveError(..))
 import HaskellWorks.CabalCache.Location (toLocation, (<.>), (</>), Location)
@@ -188,6 +188,9 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
                     DQ.fail
               & do OO.catchM @GenericError \e -> do
                     CIO.hPutStrLn IO.stderr $ displayGenericError e
+                    DQ.fail
+              & do OO.catchM @UnsupportedUri \e -> do
+                    CIO.hPutStrLn IO.stderr $ tshow e
                     DQ.fail
 
             CIO.putStrLn $ "Extracting: " <> AWS.toText existingArchiveFile

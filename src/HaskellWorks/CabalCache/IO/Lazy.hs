@@ -27,7 +27,7 @@ import Data.Functor.Identity            (Identity(..))
 import Data.Generics.Product.Any        (HasAny(the))
 import Data.List.NonEmpty               (NonEmpty ((:|)))
 import HaskellWorks.CabalCache.AppError (AwsError(..), HttpError(..), statusCodeOf)
-import HaskellWorks.CabalCache.Error    (CopyFailed(..), GenericError(..), InvalidUrl(..), NotFound(..))
+import HaskellWorks.CabalCache.Error    (CopyFailed(..), GenericError(..), InvalidUrl(..), NotFound(..), UnsupportedUri (..))
 import HaskellWorks.CabalCache.Location (Location (..))
 import HaskellWorks.CabalCache.Show     (tshow)
 import Network.AWS                      (HasEnv)
@@ -73,6 +73,7 @@ readResource :: ()
   => MonadCatch m
   => e `OO.CouldBe` AwsError
   => e `OO.CouldBe` GenericError
+  => e `OO.CouldBe` UnsupportedUri
   => e `OO.CouldBe` HttpError
   => e `OO.CouldBe` InvalidUrl
   => e `OO.CouldBe` NotFound
@@ -90,7 +91,7 @@ readResource envAws maxRetries = \case
     "s3:"     -> S3.getS3Uri envAws (URI.reslashUri uri)
     "http:"   -> readHttpUri (URI.reslashUri uri)
     "https:"  -> readHttpUri (URI.reslashUri uri)
-    scheme    -> OO.throwM (GenericError ("Unrecognised uri scheme: " <> T.pack scheme))
+    scheme    -> OO.throwM $ UnsupportedUri uri $ "Unrecognised uri scheme: " <> T.pack scheme
 
 readFirstAvailableResource :: ()
   => HasEnv t
@@ -101,6 +102,7 @@ readFirstAvailableResource :: ()
   => e `OO.CouldBe` HttpError
   => e `OO.CouldBe` InvalidUrl
   => e `OO.CouldBe` NotFound
+  => e `OO.CouldBe` UnsupportedUri
   => t
   -> NonEmpty Location
   -> Int
@@ -128,6 +130,7 @@ resourceExists :: ()
   => MonadCatch m
   => HasEnv r
   => e `OO.CouldBe` InvalidUrl
+  => e `OO.CouldBe` UnsupportedUri
   => r
   -> Location
   -> ExceptT (OO.Variant e) m Bool
@@ -159,6 +162,7 @@ writeResource :: ()
   => e `OO.CouldBe` AwsError
   => e `OO.CouldBe` HttpError
   => e `OO.CouldBe` GenericError
+  => e `OO.CouldBe` UnsupportedUri
   => MonadIO m
   => MonadCatch m
   => MonadUnliftIO m
@@ -173,7 +177,7 @@ writeResource envAws loc maxRetries lbs = case loc of
   Uri uri -> retryS3 maxRetries $ case uri ^. the @"uriScheme" of
     "s3:"   -> S3.putObject envAws (URI.reslashUri uri) lbs
     "http:" -> OO.throwM $ GenericError "HTTP PUT method not supported"
-    scheme  -> OO.throwM $ GenericError ("Unrecognised uri scheme: " <> T.pack scheme)
+    scheme  -> OO.throwM $ UnsupportedUri uri $ "Unrecognised uri scheme: " <> T.pack scheme
 
 createLocalDirectoryIfMissing :: (MonadCatch m, MonadIO m) => Location -> m ()
 createLocalDirectoryIfMissing = \case
@@ -247,6 +251,7 @@ linkOrCopyResource :: ()
   => e `OO.CouldBe` AwsError
   => e `OO.CouldBe` CopyFailed
   => e `OO.CouldBe` GenericError
+  => e `OO.CouldBe` UnsupportedUri
   => r
   -> Location
   -> Location

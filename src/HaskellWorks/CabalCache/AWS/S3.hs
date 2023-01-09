@@ -19,7 +19,7 @@ import Control.Monad.Trans.Except         (ExceptT(..))
 import Control.Monad.Trans.Resource       (MonadResource, MonadUnliftIO, liftResourceT, runResourceT)
 import Data.Conduit.Lazy                  (lazyConsume)
 import HaskellWorks.CabalCache.AppError   (AwsError(..))
-import HaskellWorks.CabalCache.Error      (CopyFailed(..), GenericError(..))
+import HaskellWorks.CabalCache.Error      (CopyFailed(..), UnsupportedUri(..))
 import HaskellWorks.CabalCache.Show       (tshow)
 import Network.AWS                        (MonadAWS, HasEnv)
 import Network.AWS.Data                   (ToText(..), fromText)
@@ -53,16 +53,16 @@ unsafeDownload :: (MonadAWS m, MonadResource m)
   -> m LBS.ByteString
 unsafeDownload bucketName objectKey = unsafeDownloadRequest (AWS.getObject bucketName objectKey)
 
-uriToS3Uri :: URI -> Either GenericError AWS.S3Uri
+uriToS3Uri :: URI -> Either UnsupportedUri AWS.S3Uri
 uriToS3Uri uri = case fromText @AWS.S3Uri (tshow uri) of
   Right s3Uri -> Right s3Uri
-  Left msg    -> Left . GenericError $ "Unable to parse URI" <> tshow msg
+  Left msg    -> Left $ UnsupportedUri uri $ "Unable to parse URI" <> tshow msg
 
 headS3Uri :: ()
   => MonadError (OO.Variant e) m
   => MonadCatch m
   => e `OO.CouldBe` AwsError
-  => e `OO.CouldBe` GenericError
+  => e `OO.CouldBe` UnsupportedUri
   => MonadResource m
   => HasEnv r
   => r
@@ -74,7 +74,7 @@ headS3Uri envAws uri = do
 
 putObject :: ()
   => e `OO.CouldBe` AwsError
-  => e `OO.CouldBe` GenericError
+  => e `OO.CouldBe` UnsupportedUri
   => MonadCatch m
   => MonadUnliftIO m
   => HasEnv r
@@ -93,7 +93,7 @@ getS3Uri :: ()
   => MonadError (OO.Variant e) m
   => MonadCatch m
   => e `OO.CouldBe` AwsError
-  => e `OO.CouldBe` GenericError
+  => e `OO.CouldBe` UnsupportedUri
   => MonadResource m
   => HasEnv r
   => r
@@ -108,7 +108,7 @@ copyS3Uri :: ()
   => MonadUnliftIO m
   => e `OO.CouldBe` AwsError
   => e `OO.CouldBe` CopyFailed
-  => e `OO.CouldBe` GenericError
+  => e `OO.CouldBe` UnsupportedUri
   => r
   -> URI
   -> URI
