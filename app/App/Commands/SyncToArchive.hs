@@ -24,6 +24,7 @@ import Data.Text                        (Text)
 import HaskellWorks.CabalCache.AppError (AwsError, HttpError (..), displayAwsError, displayHttpError)
 import HaskellWorks.CabalCache.Error    (ExitFailure(..), GenericError, InvalidUrl(..), displayGenericError)
 import HaskellWorks.CabalCache.Location (Location (..), toLocation, (<.>), (</>))
+import HaskellWorks.CabalCache.IO.Tar   (ArchiveError)
 import HaskellWorks.CabalCache.Metadata (createMetadata)
 import HaskellWorks.CabalCache.Show     (tshow)
 import HaskellWorks.CabalCache.Topology (buildPlanData, canShare)
@@ -159,7 +160,7 @@ runSyncToArchive opts = do
               metas <- createMetadata tempPath pInfo [("store-path", LC8.pack storePath)]
 
               IO.createTar tempArchiveFile (rp2 <> [metas])
-                & do OO.catchM @GenericError \_ -> do
+                & do OO.catchM @ArchiveError \_ -> do
                       CIO.hPutStrLn IO.stderr $ "Unable tar " <> tshow tempArchiveFile
                       OO.throwM WorkSkipped
 

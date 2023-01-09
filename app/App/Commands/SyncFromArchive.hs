@@ -25,6 +25,7 @@ import Data.Text                        (Text)
 import HaskellWorks.CabalCache.AppError (AwsError, HttpError (..), displayAwsError, displayHttpError)
 import HaskellWorks.CabalCache.Error    (ExitFailure(..), GenericError, InvalidUrl(..), NotFound, displayGenericError)
 import HaskellWorks.CabalCache.IO.Lazy  (readFirstAvailableResource)
+import HaskellWorks.CabalCache.IO.Tar   (ArchiveError(..))
 import HaskellWorks.CabalCache.Location (toLocation, (<.>), (</>))
 import HaskellWorks.CabalCache.Metadata (loadMetadata)
 import HaskellWorks.CabalCache.Show     (tshow)
@@ -191,8 +192,8 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
             liftIO $ LBS.writeFile tempArchiveFile existingArchiveFileContents
 
             IO.extractTar tempArchiveFile storePath
-              & do OO.catchM @GenericError \e -> do
-                    CIO.putStrLn $ "Unable to extract tar at " <> tshow tempArchiveFile <> " because: " <> displayGenericError e
+              & do OO.catchM @ArchiveError \(ArchiveError reason') -> do
+                    CIO.putStrLn $ "Unable to extract tar at " <> tshow tempArchiveFile <> " because: " <> reason'
                     DQ.fail
 
             meta <- loadMetadata packageStorePath
