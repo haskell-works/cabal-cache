@@ -27,7 +27,7 @@ import Data.Functor.Identity            (Identity(..))
 import Data.Generics.Product.Any        (HasAny(the))
 import Data.List.NonEmpty               (NonEmpty ((:|)))
 import HaskellWorks.CabalCache.AppError (AwsError(..), HttpError(..), statusCodeOf)
-import HaskellWorks.CabalCache.Error    (CopyFailed(..), GenericError(..), InvalidUrl(..), NotFound(..), UnsupportedUri (..))
+import HaskellWorks.CabalCache.Error    (CopyFailed(..), GenericError(..), InvalidUrl(..), NotFound(..), NotImplemented(..), UnsupportedUri(..))
 import HaskellWorks.CabalCache.Location (Location (..))
 import HaskellWorks.CabalCache.Show     (tshow)
 import Network.AWS                      (HasEnv)
@@ -162,6 +162,7 @@ writeResource :: ()
   => e `OO.CouldBe` AwsError
   => e `OO.CouldBe` HttpError
   => e `OO.CouldBe` GenericError
+  => e `OO.CouldBe` NotImplemented
   => e `OO.CouldBe` UnsupportedUri
   => MonadIO m
   => MonadCatch m
@@ -174,10 +175,10 @@ writeResource :: ()
   -> ExceptT (OO.Variant e) m ()
 writeResource envAws loc maxRetries lbs = case loc of
   Local path -> liftIO (LBS.writeFile path lbs) >> return ()
-  Uri uri -> retryS3 maxRetries $ case uri ^. the @"uriScheme" of
-    "s3:"   -> S3.putObject envAws (URI.reslashUri uri) lbs
-    "http:" -> OO.throwM $ GenericError "HTTP PUT method not supported"
-    scheme  -> OO.throwM $ UnsupportedUri uri $ "Unrecognised uri scheme: " <> T.pack scheme
+  Uri uri' -> retryS3 maxRetries $ case uri' ^. the @"uriScheme" of
+    "s3:"   -> S3.putObject envAws (URI.reslashUri uri') lbs
+    "http:" -> OO.throwM $ NotImplemented "HTTP PUT method not supported"
+    scheme  -> OO.throwM $ UnsupportedUri uri' $ "Unrecognised uri scheme: " <> T.pack scheme
 
 createLocalDirectoryIfMissing :: (MonadCatch m, MonadIO m) => Location -> m ()
 createLocalDirectoryIfMissing = \case
@@ -251,6 +252,7 @@ linkOrCopyResource :: ()
   => e `OO.CouldBe` AwsError
   => e `OO.CouldBe` CopyFailed
   => e `OO.CouldBe` GenericError
+  => e `OO.CouldBe` NotImplemented
   => e `OO.CouldBe` UnsupportedUri
   => r
   -> Location
@@ -262,13 +264,13 @@ linkOrCopyResource envAws source target = case source of
       liftIO $ IO.createDirectoryIfMissing True (FP.takeDirectory targetPath)
       targetPathExists <- liftIO $ IO.doesFileExist targetPath
       unless targetPathExists $ liftIO $ IO.createFileLink sourcePath targetPath
-    Uri _ -> OO.throwM $ GenericError "Can't copy between different file backends"
+    Uri _ -> OO.throwM $ NotImplemented "Can't copy between different file backends"
   Uri sourceUri -> case target of
-    Local _targetPath -> OO.throwM $ GenericError "Can't copy between different file backends"
+    Local _targetPath -> OO.throwM $ NotImplemented "Can't copy between different file backends"
     Uri targetUri    -> case (sourceUri ^. the @"uriScheme", targetUri ^. the @"uriScheme") of
       ("s3:", "s3:")               -> retryUnless @AwsError ((== 301) . statusCodeOf) 3 (S3.copyS3Uri envAws (URI.reslashUri sourceUri) (URI.reslashUri targetUri))
-      ("http:", "http:")           -> OO.throwM $ GenericError "Link and copy unsupported for http backend"
-      (sourceScheme, targetScheme) -> OO.throwM $ GenericError $ "Unsupported backend combination: " <> T.pack sourceScheme <> " to " <> T.pack targetScheme
+      ("http:", "http:")           -> OO.throwM $ NotImplemented "Link and copy unsupported for http backend"
+      (sourceScheme, targetScheme) -> OO.throwM $ NotImplemented $ "Unsupported backend combination: " <> T.pack sourceScheme <> " to " <> T.pack targetScheme
 
 readHttpUri :: ()
   => MonadError (OO.Variant e) m

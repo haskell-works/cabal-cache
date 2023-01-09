@@ -8,6 +8,7 @@ module HaskellWorks.CabalCache.Error
     GenericError(GenericError),
     InvalidUrl(InvalidUrl),
     NotFound(NotFound),
+    NotImplemented(NotImplemented),
     UnsupportedUri(UnsupportedUri),
     displayGenericError,
   ) where
@@ -28,6 +29,8 @@ data InvalidUrl = InvalidUrl
   } deriving (Eq, Show, Generic)
 
 data NotFound = NotFound deriving (Eq, Show, Generic)
+
+data NotImplemented = NotImplemented Text deriving (Eq, Show, Generic)
 
 data UnsupportedUri = UnsupportedUri
   { uri    :: URI
