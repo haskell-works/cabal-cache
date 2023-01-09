@@ -13,4 +13,4 @@ commands = OA.subparser $ mempty
   <>  cmdCp
 
 cmdS3 :: OA.Mod OA.CommandFields (IO ())
-cmdS3 = OA.command "s3"  $ flip OA.info OA.idm commands
+cmdS3 = OA.command "s3" $ flip OA.info OA.idm commands

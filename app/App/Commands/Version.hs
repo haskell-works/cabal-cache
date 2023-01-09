@@ -28,4 +28,4 @@ runVersion _ = do
   CIO.putStrLn $ "cabal-cache " <> T.pack version
 
 cmdVersion :: Mod CommandFields (IO ())
-cmdVersion = OA.command "version"  $ flip OA.info OA.idm $ runVersion <$> optsVersion
+cmdVersion = OA.command "version" $ flip OA.info OA.idm $ runVersion <$> optsVersion

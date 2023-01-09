@@ -1,43 +1,53 @@
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE OverloadedStrings     #-}
 
 module HaskellWorks.CabalCache.AppError
-  ( AppError(..),
-    GenericError(..),
-    NotFound(..),
-    displayAppError,
-    displayGenericError,
-    appErrorStatus,
+  ( AwsError(..),
+    HttpError(..),
+    HasStatusCode(..),
+    HasMaybeStatusCode(..),
+    displayAwsError,
+    displayHttpError,
   ) where
 
 import Data.Text                    (Text)
 import GHC.Generics                 (Generic)
 import HaskellWorks.CabalCache.Show (tshow)
 
+import qualified Network.HTTP.Client as HTTP
 import qualified Network.HTTP.Types as HTTP
 
-data NotFound = NotFound deriving (Eq, Show, Generic)
-
-data GenericError = GenericError Text deriving (Eq, Show, Generic)
-
-data AppError
-  = AwsAppError
-    { status :: HTTP.Status
-    }
-  | HttpAppError
-    { status :: HTTP.Status
-    }
-  | RetriesFailedAppError
+newtype AwsError = AwsError
+  { status :: HTTP.Status
+  }
   deriving (Eq, Show, Generic)
 
-displayAppError :: AppError -> Text
-displayAppError (AwsAppError s)       = tshow s
-displayAppError (HttpAppError s)      = tshow s
-displayAppError RetriesFailedAppError = "Multiple retries failed"
+data HttpError = HttpError
+  { reasponse :: HTTP.Request
+  , content    :: HTTP.HttpExceptionContent
+  }
+  deriving (Show, Generic)
 
-displayGenericError :: GenericError -> Text
-displayGenericError (GenericError msg) = msg
+displayAwsError :: AwsError -> Text
+displayAwsError (AwsError s) = tshow s
 
-appErrorStatus :: AppError -> Maybe Int
-appErrorStatus (AwsAppError (HTTP.Status statusCode _)) = Just statusCode
-appErrorStatus _                                        = Nothing
+displayHttpError :: HttpError -> Text
+displayHttpError (HttpError _ s) = tshow s
+
+class HasStatusCode a where
+  statusCodeOf :: a -> Int
+
+class HasMaybeStatusCode a where
+  maybeStatusCodeOf :: a -> Maybe Int
+
+instance HasStatusCode AwsError where
+  statusCodeOf (AwsError (HTTP.Status c _)) = c
+
+instance HasMaybeStatusCode AwsError where
+  maybeStatusCodeOf (AwsError (HTTP.Status c _)) = Just c
+
+instance HasMaybeStatusCode HttpError where
+  maybeStatusCodeOf (HttpError _ content') = case content' of
+    HTTP.StatusCodeException response _ -> let HTTP.Status c _ = HTTP.responseStatus response in Just c
+    _ -> Nothing

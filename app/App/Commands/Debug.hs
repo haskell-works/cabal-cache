@@ -13,4 +13,4 @@ commands = OA.subparser $ mempty
   <>  cmdS3
 
 cmdDebug :: OA.Mod OA.CommandFields (IO ())
-cmdDebug = OA.command "debug"  $ flip OA.info OA.idm commands
+cmdDebug = OA.command "debug" $ flip OA.info OA.idm commands

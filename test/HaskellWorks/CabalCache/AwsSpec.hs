@@ -13,7 +13,8 @@ import Control.Monad
 import Control.Monad.Except             (runExceptT)
 import Control.Monad.IO.Class
 import Data.Maybe                       (isJust)
-import HaskellWorks.CabalCache.AppError
+import HaskellWorks.CabalCache.AppError (AwsError(..))
+import HaskellWorks.CabalCache.Error    (UnsupportedUri)
 import HaskellWorks.Hspec.Hedgehog
 import Hedgehog
 import Test.Hspec
@@ -40,11 +41,11 @@ spec = describe "HaskellWorks.CabalCache.QuerySpec" do
     unless ci do
       envAws <- liftIO $ AWS.mkEnv AWS.Oregon (const LBSC.putStrLn)
       let Just uri = URI.parseURI "s3://jky-mayhem/hjddhd"
-      result :: Either (OO.Variant '[AppError, GenericError]) ()
+      result :: Either (OO.Variant '[AwsError, UnsupportedUri]) ()
         <- liftIO $ runExceptT $ OO.suspendM AWS.runResourceT $ void (AWS.headS3Uri envAws uri)
 
       case result of
         Right _ -> H.failure
-        Left e -> OO.toEithers e === Left AwsAppError
+        Left e -> OO.toEithers e === Left AwsError
           { status = HTTP.Status { HTTP.statusCode = 404 , HTTP.statusMessage = "Not Found" }
           }

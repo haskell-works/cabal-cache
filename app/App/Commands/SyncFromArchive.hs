@@ -11,6 +11,7 @@ import App.Commands.Options.Parser      (text)
 import App.Commands.Options.Types       (SyncFromArchiveOptions (SyncFromArchiveOptions))
 import Control.Applicative              (optional, Alternative(..))
 import Control.Lens                     ((^..), (.~), (<&>), (%~), (&), (^.), Each(each))
+import Control.Lens.Combinators         (traverse1)
 import Control.Monad                    (when, unless, forM_)
 import Control.Monad.Catch              (MonadCatch)
 import Control.Monad.Except             (ExceptT, MonadIO(..))
@@ -19,17 +20,20 @@ import Control.Monad.Trans.Resource     (runResourceT)
 import Data.ByteString                  (ByteString)
 import Data.ByteString.Lazy.Search      (replace)
 import Data.Generics.Product.Any        (the)
+import Data.List.NonEmpty               (NonEmpty)
 import Data.Maybe                       (fromMaybe)
 import Data.Monoid                      (Dual(Dual), Endo(Endo))
 import Data.Text                        (Text)
-import HaskellWorks.CabalCache.AppError (displayAppError, AppError, NotFound, GenericError, displayGenericError)
-import HaskellWorks.CabalCache.Error    (ExitFailure(..))
+import HaskellWorks.CabalCache.AppError (AwsError, HttpError (..), displayAwsError, displayHttpError)
+import HaskellWorks.CabalCache.Error    (DecodeError(..), ExitFailure(..), InvalidUrl(..), NotFound, UnsupportedUri(..))
 import HaskellWorks.CabalCache.IO.Lazy  (readFirstAvailableResource)
-import HaskellWorks.CabalCache.Location (toLocation, (<.>), (</>))
+import HaskellWorks.CabalCache.IO.Tar   (ArchiveError(..))
+import HaskellWorks.CabalCache.Location (toLocation, (<.>), (</>), Location)
 import HaskellWorks.CabalCache.Metadata (loadMetadata)
 import HaskellWorks.CabalCache.Show     (tshow)
 import HaskellWorks.CabalCache.Version  (archiveVersion)
 import Options.Applicative              (CommandFields, Mod, Parser)
+import Options.Applicative.NonEmpty     (some1)
 import System.Directory                 (createDirectoryIfMissing, doesDirectoryExist)
 
 import qualified App.Commands.Options.Types                       as Z
@@ -38,7 +42,7 @@ import qualified Control.Concurrent.STM                           as STM
 import qualified Control.Monad.Oops                               as OO
 import qualified Data.ByteString.Char8                            as C8
 import qualified Data.ByteString.Lazy                             as LBS
-import qualified Data.List                                        as L
+import qualified Data.List.NonEmpty                               as NEL
 import qualified Data.Map                                         as M
 import qualified Data.Map.Strict                                  as Map
 import qualified Data.Text                                        as T
@@ -60,6 +64,7 @@ import qualified System.Directory                                 as IO
 import qualified System.IO                                        as IO
 import qualified System.IO.Temp                                   as IO
 import qualified System.IO.Unsafe                                 as IO
+import Data.Semigroup (Semigroup(..))
 
 {- HLINT ignore "Monoid law, left identity" -}
 {- HLINT ignore "Reduce duplication"        -}
@@ -72,12 +77,12 @@ runSyncFromArchive :: Z.SyncFromArchiveOptions -> IO ()
 runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
   let hostEndpoint          = opts ^. the @"hostEndpoint"
   let storePath             = opts ^. the @"storePath"
-  let archiveUris           = opts ^. the @"archiveUris"
+  let archiveUris           = opts ^. the @"archiveUris" :: NonEmpty Location
   let threads               = opts ^. the @"threads"
   let awsLogLevel           = opts ^. the @"awsLogLevel"
-  let versionedArchiveUris  = archiveUris & each %~ (</> archiveVersion)
+  let versionedArchiveUris  = archiveUris & traverse1 %~ (</> archiveVersion) :: NonEmpty Location
   let storePathHash         = opts ^. the @"storePathHash" & fromMaybe (H.hashStorePath storePath)
-  let scopedArchiveUris     = versionedArchiveUris & each %~ (</> T.pack storePathHash)
+  let scopedArchiveUris     = versionedArchiveUris & traverse1 %~ (</> T.pack storePathHash)
   let maxRetries            = opts ^. the @"maxRetries"
 
   CIO.putStrLn $ "Store path: "       <> AWS.toText storePath
@@ -90,11 +95,8 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
 
   OO.catchAndExitFailureM @ExitFailure do
     planJson <- Z.loadPlan (opts ^. the @"path" </> opts ^. the @"buildPath")
-      & do OO.catchM @AppError \e -> do
-            CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError e
-            OO.throwM ExitFailure
-      & do OO.catchM @GenericError \e -> do
-            CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayGenericError e
+      & do OO.catchM @DecodeError \e -> do
+            CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> tshow e
             OO.throwM ExitFailure
 
     compilerContext <- Z.mkCompilerContext planJson
@@ -151,8 +153,8 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
                   DQ.succeed
 
           let archiveBaseName     = Z.packageDir pInfo <.> ".tar.gz"
-          let archiveFiles        = versionedArchiveUris & each %~ (</> T.pack archiveBaseName)
-          let scopedArchiveFiles  = scopedArchiveUris & each %~ (</> T.pack archiveBaseName)
+          let archiveFiles        = versionedArchiveUris & traverse1 %~ (</> T.pack archiveBaseName)
+          let scopedArchiveFiles  = scopedArchiveUris & traverse1 %~ (</> T.pack archiveBaseName)
           let packageStorePath    = storePath </> Z.packageDir pInfo
 
           storeDirectoryExists <- liftIO $ doesDirectoryExist packageStorePath
@@ -169,17 +171,23 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
           when storeDirectoryExists DQ.succeed
 
           OO.suspendM runResourceT $ ensureStorePathCleanup packageStorePath do
-            let locations = foldMap L.tuple2ToList (L.zip archiveFiles scopedArchiveFiles)
+            let locations = sconcat $ fmap L.tuple2ToNel (NEL.zip archiveFiles scopedArchiveFiles)
 
             (existingArchiveFileContents, existingArchiveFile) <- readFirstAvailableResource envAws locations maxRetries
-              & do OO.catchM @AppError \e -> do
-                    CIO.putStrLn $ "Unable to download any of: " <> tshow locations <> " because: " <> displayAppError e
+              & do OO.catchM @AwsError \e -> do
+                    CIO.putStrLn $ "Unable to download any of: " <> tshow locations <> " because: " <> displayAwsError e
+                    DQ.fail
+              & do OO.catchM @HttpError \e -> do
+                    CIO.putStrLn $ "Unable to download any of: " <> tshow locations <> " because: " <> displayHttpError e
                     DQ.fail
               & do OO.catchM @NotFound \_ -> do
                     CIO.putStrLn $ "Not found: " <> tshow locations
                     DQ.fail
-              & do OO.catchM @GenericError \e -> do
-                    CIO.putStrLn $ "GenericError for " <> tshow locations <> ": " <> displayGenericError e
+              & do OO.catchM @InvalidUrl \(InvalidUrl url' reason') -> do
+                    CIO.hPutStrLn IO.stderr $ "Invalid URL: " <> tshow url' <> ", " <> reason'
+                    DQ.fail
+              & do OO.catchM @UnsupportedUri \e -> do
+                    CIO.hPutStrLn IO.stderr $ tshow e
                     DQ.fail
 
             CIO.putStrLn $ "Extracting: " <> AWS.toText existingArchiveFile
@@ -188,11 +196,8 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
             liftIO $ LBS.writeFile tempArchiveFile existingArchiveFileContents
 
             IO.extractTar tempArchiveFile storePath
-              & do OO.catchM @AppError \e -> do
-                    CIO.putStrLn $ "Unable to extract tar at " <> tshow tempArchiveFile <> " because: " <> displayAppError e
-                    DQ.fail
-              & do OO.catchM @GenericError \e -> do
-                    CIO.putStrLn $ "Unable to extract tar at " <> tshow tempArchiveFile <> " because: " <> displayGenericError e
+              & do OO.catchM @ArchiveError \(ArchiveError reason') -> do
+                    CIO.putStrLn $ "Unable to extract tar at " <> tshow tempArchiveFile <> " because: " <> reason'
                     DQ.fail
 
             meta <- loadMetadata packageStorePath
@@ -223,12 +228,7 @@ ensureStorePathCleanup :: ()
 ensureStorePathCleanup packageStorePath = 
   OO.snatchM @DQ.DownloadStatus \downloadStatus -> do
     case downloadStatus of
-      DQ.DownloadFailure -> do
-        M.cleanupStorePath packageStorePath
-          & do OO.catchM @AppError \e -> do
-                CIO.hPutStrLn IO.stderr $ "Failed to cleanup store path: " <> displayAppError e
-          & do OO.catchM @GenericError \e -> do
-                CIO.hPutStrLn IO.stderr $ "Failed to cleanup store path: " <> displayGenericError e
+      DQ.DownloadFailure -> M.cleanupStorePath packageStorePath
       DQ.DownloadSuccess ->
         CIO.hPutStrLn IO.stdout $ "Successfully cleaned up store path: " <> tshow packageStorePath
     OO.throwM downloadStatus
@@ -242,7 +242,7 @@ optsSyncFromArchive = SyncFromArchiveOptions
       <> OA.value AWS.Oregon
       <> OA.help "The AWS region in which to operate"
       )
-  <*> some
+  <*> some1
       (  OA.option (OA.maybeReader (toLocation . T.pack))
         (   OA.long "archive-uri"
         <>  OA.help "Archive URI to sync to"

@@ -18,7 +18,8 @@ import Control.Monad.Trans.AWS            (RsBody)
 import Control.Monad.Trans.Except         (ExceptT(..))
 import Control.Monad.Trans.Resource       (MonadResource, MonadUnliftIO, liftResourceT, runResourceT)
 import Data.Conduit.Lazy                  (lazyConsume)
-import HaskellWorks.CabalCache.AppError   (AppError(..), GenericError(..))
+import HaskellWorks.CabalCache.AppError   (AwsError(..))
+import HaskellWorks.CabalCache.Error      (CopyFailed(..), UnsupportedUri(..))
 import HaskellWorks.CabalCache.Show       (tshow)
 import Network.AWS                        (MonadAWS, HasEnv)
 import Network.AWS.Data                   (ToText(..), fromText)
@@ -52,16 +53,16 @@ unsafeDownload :: (MonadAWS m, MonadResource m)
   -> m LBS.ByteString
 unsafeDownload bucketName objectKey = unsafeDownloadRequest (AWS.getObject bucketName objectKey)
 
-uriToS3Uri :: URI -> Either GenericError AWS.S3Uri
+uriToS3Uri :: URI -> Either UnsupportedUri AWS.S3Uri
 uriToS3Uri uri = case fromText @AWS.S3Uri (tshow uri) of
   Right s3Uri -> Right s3Uri
-  Left msg    -> Left . GenericError $ "Unable to parse URI" <> tshow msg
+  Left msg    -> Left $ UnsupportedUri uri $ "Unable to parse URI" <> tshow msg
 
 headS3Uri :: ()
   => MonadError (OO.Variant e) m
   => MonadCatch m
-  => e `OO.CouldBe` AppError
-  => e `OO.CouldBe` GenericError
+  => e `OO.CouldBe` AwsError
+  => e `OO.CouldBe` UnsupportedUri
   => MonadResource m
   => HasEnv r
   => r
@@ -72,8 +73,8 @@ headS3Uri envAws uri = do
   AWS.handleAwsError $ AWS.runAWS envAws $ AWS.send $ AWS.headObject b k
 
 putObject :: ()
-  => e `OO.CouldBe` AppError
-  => e `OO.CouldBe` GenericError
+  => e `OO.CouldBe` AwsError
+  => e `OO.CouldBe` UnsupportedUri
   => MonadCatch m
   => MonadUnliftIO m
   => HasEnv r
@@ -91,8 +92,8 @@ putObject envAws uri lbs = do
 getS3Uri :: ()
   => MonadError (OO.Variant e) m
   => MonadCatch m
-  => e `OO.CouldBe` AppError
-  => e `OO.CouldBe` GenericError
+  => e `OO.CouldBe` AwsError
+  => e `OO.CouldBe` UnsupportedUri
   => MonadResource m
   => HasEnv r
   => r
@@ -105,8 +106,9 @@ getS3Uri envAws uri = do
 copyS3Uri :: ()
   => HasEnv r
   => MonadUnliftIO m
-  => e `OO.CouldBe` AppError
-  => e `OO.CouldBe` GenericError
+  => e `OO.CouldBe` AwsError
+  => e `OO.CouldBe` CopyFailed
+  => e `OO.CouldBe` UnsupportedUri
   => r
   -> URI
   -> URI
@@ -119,4 +121,4 @@ copyS3Uri envAws source target = do
   let responseCode = response ^. AWS.corsResponseStatus
   unless (200 <= responseCode && responseCode < 300) do
     liftIO $ CIO.hPutStrLn IO.stderr $ "Error in S3 copy: " <> tshow response
-    OO.throwM RetriesFailedAppError
+    OO.throwM CopyFailed

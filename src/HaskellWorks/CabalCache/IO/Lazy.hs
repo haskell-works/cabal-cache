@@ -19,13 +19,15 @@ module HaskellWorks.CabalCache.IO.Lazy
 
 import Control.Lens                     ((&), (^.))
 import Control.Monad                    (unless)
-import Control.Monad.Catch              (MonadCatch(..), MonadThrow(throwM))
+import Control.Monad.Catch              (MonadCatch(..))
 import Control.Monad.Except             (MonadIO(..), MonadError(..))
 import Control.Monad.Trans.Except       (ExceptT(..))
 import Control.Monad.Trans.Resource     (MonadResource, runResourceT, MonadUnliftIO)
 import Data.Functor.Identity            (Identity(..))
 import Data.Generics.Product.Any        (HasAny(the))
-import HaskellWorks.CabalCache.AppError (AppError(..), NotFound(..), appErrorStatus, GenericError(..))
+import Data.List.NonEmpty               (NonEmpty ((:|)))
+import HaskellWorks.CabalCache.AppError (AwsError(..), HttpError(..), statusCodeOf)
+import HaskellWorks.CabalCache.Error    (CopyFailed(..), InvalidUrl(..), NotFound(..), NotImplemented(..), UnsupportedUri(..))
 import HaskellWorks.CabalCache.Location (Location (..))
 import HaskellWorks.CabalCache.Show     (tshow)
 import Network.AWS                      (HasEnv)
@@ -34,6 +36,7 @@ import Network.URI                      (URI)
 import qualified Control.Concurrent                   as IO
 import qualified Control.Monad.Oops                   as OO
 import qualified Data.ByteString.Lazy                 as LBS
+import qualified Data.List.NonEmpty                   as NEL
 import qualified Data.Text                            as T
 import qualified HaskellWorks.CabalCache.AWS.S3       as S3
 import qualified HaskellWorks.CabalCache.IO.Console   as CIO
@@ -45,6 +48,7 @@ import qualified System.FilePath.Posix                as FP
 import qualified System.IO                            as IO
 import qualified System.IO.Error                      as IO
 
+
 {- HLINT ignore "Redundant do"        -}
 {- HLINT ignore "Reduce duplication"  -}
 {- HLINT ignore "Redundant bracket"   -}
@@ -52,26 +56,26 @@ import qualified System.IO.Error                      as IO
 handleHttpError :: ()
   => MonadError (OO.Variant e) m
   => MonadCatch m
-  => e `OO.CouldBe` AppError
-  => e `OO.CouldBe` GenericError
+  => e `OO.CouldBe` HttpError
+  => e `OO.CouldBe` InvalidUrl
   => MonadIO m
   => Monad m
   => m a
   -> m a
 handleHttpError f = catch f $ \(e :: HTTP.HttpException) ->
   case e of
-    (HTTP.HttpExceptionRequest _ e') -> case e' of
-      HTTP.StatusCodeException resp _ -> OO.throwM (HttpAppError (resp & HTTP.responseStatus))
-      _                               -> OO.throwM (GenericError (tshow e'))
-    _                                 -> liftIO $ throwM e
+    HTTP.HttpExceptionRequest request content' -> OO.throwM $ HttpError request content'
+    HTTP.InvalidUrlException url' reason' -> OO.throwM $ InvalidUrl (tshow url') (tshow reason')
 
 readResource :: ()
   => HasEnv r
   => MonadResource m
   => MonadCatch m
-  => e `OO.CouldBe` AppError
+  => e `OO.CouldBe` AwsError
+  => e `OO.CouldBe` UnsupportedUri
+  => e `OO.CouldBe` HttpError
+  => e `OO.CouldBe` InvalidUrl
   => e `OO.CouldBe` NotFound
-  => e `OO.CouldBe` GenericError
   => r
   -> Int
   -> Location
@@ -86,26 +90,31 @@ readResource envAws maxRetries = \case
     "s3:"     -> S3.getS3Uri envAws (URI.reslashUri uri)
     "http:"   -> readHttpUri (URI.reslashUri uri)
     "https:"  -> readHttpUri (URI.reslashUri uri)
-    scheme    -> OO.throwM (GenericError ("Unrecognised uri scheme: " <> T.pack scheme))
+    scheme    -> OO.throwM $ UnsupportedUri uri $ "Unrecognised uri scheme: " <> T.pack scheme
 
 readFirstAvailableResource :: ()
   => HasEnv t
   => MonadResource m
   => MonadCatch m
-  => e `OO.CouldBe` AppError
+  => e `OO.CouldBe` AwsError
+  => e `OO.CouldBe` HttpError
+  => e `OO.CouldBe` InvalidUrl
   => e `OO.CouldBe` NotFound
-  => e `OO.CouldBe` GenericError
+  => e `OO.CouldBe` UnsupportedUri
   => t
-  -> [Location]
+  -> NonEmpty Location
   -> Int
   -> ExceptT (OO.Variant e) m (LBS.ByteString, Location)
-readFirstAvailableResource _ [] _ = OO.throwM $ GenericError "No resources specified in read"
-readFirstAvailableResource envAws (a:as) maxRetries = do
+readFirstAvailableResource envAws (a:|as) maxRetries = do
   (, a) <$> readResource envAws maxRetries a
-    & OO.catchM @AppError \e -> do
-        if null as
-          then OO.throwFM (Identity e)
-          else readFirstAvailableResource envAws as maxRetries
+    & do OO.catchM @AwsError \e -> do
+          case NEL.nonEmpty as of
+            Nothing -> OO.throwFM (Identity e)
+            Just nas -> readFirstAvailableResource envAws nas maxRetries
+    & do OO.catchM @HttpError \e -> do
+          case NEL.nonEmpty as of
+            Nothing -> OO.throwFM (Identity e)
+            Just nas -> readFirstAvailableResource envAws nas maxRetries
 
 safePathIsSymbolLink :: FilePath -> IO Bool
 safePathIsSymbolLink filePath = catch (IO.pathIsSymbolicLink filePath) handler
@@ -118,6 +127,8 @@ resourceExists :: ()
   => MonadUnliftIO m
   => MonadCatch m
   => HasEnv r
+  => e `OO.CouldBe` InvalidUrl
+  => e `OO.CouldBe` UnsupportedUri
   => r
   -> Location
   -> ExceptT (OO.Variant e) m Bool
@@ -133,14 +144,22 @@ resourceExists envAws = \case
             target <- liftIO $ IO.getSymbolicLinkTarget path
             resourceExists envAws (Local target)
           else return False
-  Uri uri       -> case uri ^. the @"uriScheme" of
-    "s3:"   -> OO.suspendM runResourceT $ (True <$ S3.headS3Uri envAws (URI.reslashUri uri)) & OO.catchM @AppError (pure . const False) & OO.catchM @GenericError (pure . const False)
-    "http:" ->                            (True <$ headHttpUri         (URI.reslashUri uri)) & OO.catchM @AppError (pure . const False) & OO.catchM @GenericError (pure . const False)
+  Uri uri -> case uri ^. the @"uriScheme" of
+    "s3:" -> do
+      OO.suspendM runResourceT $ (True <$ S3.headS3Uri envAws (URI.reslashUri uri))
+        & OO.catchM @AwsError (pure . const False)
+        & OO.catchM @HttpError (pure . const False)
+    "http:" -> do
+      (True <$ headHttpUri (URI.reslashUri uri))
+        & OO.catchM @AwsError (pure . const False)
+        & OO.catchM @HttpError (pure . const False)
     _scheme -> return False
 
 writeResource :: ()
-  => e `OO.CouldBe` AppError
-  => e `OO.CouldBe` GenericError
+  => e `OO.CouldBe` AwsError
+  => e `OO.CouldBe` HttpError
+  => e `OO.CouldBe` NotImplemented
+  => e `OO.CouldBe` UnsupportedUri
   => MonadIO m
   => MonadCatch m
   => MonadUnliftIO m
@@ -152,10 +171,10 @@ writeResource :: ()
   -> ExceptT (OO.Variant e) m ()
 writeResource envAws loc maxRetries lbs = case loc of
   Local path -> liftIO (LBS.writeFile path lbs) >> return ()
-  Uri uri -> retryS3 maxRetries $ case uri ^. the @"uriScheme" of
-    "s3:"   -> S3.putObject envAws (URI.reslashUri uri) lbs
-    "http:" -> OO.throwM $ GenericError "HTTP PUT method not supported"
-    scheme  -> OO.throwM $ GenericError ("Unrecognised uri scheme: " <> T.pack scheme)
+  Uri uri' -> retryS3 maxRetries $ case uri' ^. the @"uriScheme" of
+    "s3:"   -> S3.putObject envAws (URI.reslashUri uri') lbs
+    "http:" -> OO.throwM $ NotImplemented "HTTP PUT method not supported"
+    scheme  -> OO.throwM $ UnsupportedUri uri' $ "Unrecognised uri scheme: " <> T.pack scheme
 
 createLocalDirectoryIfMissing :: (MonadCatch m, MonadIO m) => Location -> m ()
 createLocalDirectoryIfMissing = \case
@@ -208,16 +227,14 @@ retryUnless p = retryWhen (not . p)
 
 retryS3 :: ()
   => MonadIO m
-  => e `OO.CouldBe` AppError
+  => e `OO.CouldBe` AwsError
   => Int
   -> ExceptT (OO.Variant e) m a
   -> ExceptT (OO.Variant e) m a
 retryS3 maxRetries a = do
   retryWhen retryPredicate maxRetries a
- where
-  retryPredicate appe = case appErrorStatus appe of
-                          Just i   -> i `elem` retryableHTTPStatuses
-                          Nothing  -> False
+  where retryPredicate :: AwsError -> Bool
+        retryPredicate e = statusCodeOf e `elem` retryableHTTPStatuses
 
   -- https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html#ErrorCodeList
   -- https://stackoverflow.com/a/51770411/2976251
@@ -228,8 +245,10 @@ retryableHTTPStatuses = [408, 409, 425, 426, 502, 503, 504]
 linkOrCopyResource :: ()
   => HasEnv r
   => MonadUnliftIO m
-  => e `OO.CouldBe` AppError
-  => e `OO.CouldBe` GenericError
+  => e `OO.CouldBe` AwsError
+  => e `OO.CouldBe` CopyFailed
+  => e `OO.CouldBe` NotImplemented
+  => e `OO.CouldBe` UnsupportedUri
   => r
   -> Location
   -> Location
@@ -240,19 +259,19 @@ linkOrCopyResource envAws source target = case source of
       liftIO $ IO.createDirectoryIfMissing True (FP.takeDirectory targetPath)
       targetPathExists <- liftIO $ IO.doesFileExist targetPath
       unless targetPathExists $ liftIO $ IO.createFileLink sourcePath targetPath
-    Uri _ -> OO.throwM $ GenericError "Can't copy between different file backends"
+    Uri _ -> OO.throwM $ NotImplemented "Can't copy between different file backends"
   Uri sourceUri -> case target of
-    Local _targetPath -> OO.throwM $ GenericError "Can't copy between different file backends"
+    Local _targetPath -> OO.throwM $ NotImplemented "Can't copy between different file backends"
     Uri targetUri    -> case (sourceUri ^. the @"uriScheme", targetUri ^. the @"uriScheme") of
-      ("s3:", "s3:")               -> retryUnless @AppError ((== Just 301) . appErrorStatus) 3 (S3.copyS3Uri envAws (URI.reslashUri sourceUri) (URI.reslashUri targetUri))
-      ("http:", "http:")           -> OO.throwM $ GenericError "Link and copy unsupported for http backend"
-      (sourceScheme, targetScheme) -> OO.throwM $ GenericError $ "Unsupported backend combination: " <> T.pack sourceScheme <> " to " <> T.pack targetScheme
+      ("s3:", "s3:")               -> retryUnless @AwsError ((== 301) . statusCodeOf) 3 (S3.copyS3Uri envAws (URI.reslashUri sourceUri) (URI.reslashUri targetUri))
+      ("http:", "http:")           -> OO.throwM $ NotImplemented "Link and copy unsupported for http backend"
+      (sourceScheme, targetScheme) -> OO.throwM $ NotImplemented $ "Unsupported backend combination: " <> T.pack sourceScheme <> " to " <> T.pack targetScheme
 
 readHttpUri :: ()
   => MonadError (OO.Variant e) m
   => MonadCatch m
-  => e `OO.CouldBe` AppError
-  => e `OO.CouldBe` GenericError
+  => e `OO.CouldBe` HttpError
+  => e `OO.CouldBe` InvalidUrl
   => MonadIO m
   => URI
   -> m LBS.ByteString
@@ -266,10 +285,10 @@ readHttpUri httpUri = handleHttpError do
 headHttpUri :: ()
   => MonadError (OO.Variant e) m
   => MonadCatch m
-  => e `OO.CouldBe` AppError
-  => e `OO.CouldBe` GenericError
+  => e `OO.CouldBe` HttpError
+  => e `OO.CouldBe` InvalidUrl
   => MonadIO m
-  =>URI
+  => URI
   -> m LBS.ByteString
 headHttpUri httpUri = handleHttpError do
   manager <- liftIO $ HTTP.newManager HTTP.defaultManagerSettings
@@ -279,20 +298,8 @@ headHttpUri httpUri = handleHttpError do
   return $ HTTP.responseBody response
 
 removePathRecursive :: ()
-  => e `OO.CouldBe` AppError
-  => e `OO.CouldBe` GenericError
   => MonadCatch m
   => MonadIO m
   => [Char]
   -> ExceptT (OO.Variant e) m ()
-removePathRecursive pkgStorePath = catch action handler
-  where action = liftIO (IO.removeDirectoryRecursive pkgStorePath)
-        handler :: ()
-          => MonadIO m
-          => MonadError (OO.Variant e) m
-          => e `OO.CouldBe` GenericError
-          => IOError
-          -> m b
-        handler e = do
-          CIO.hPutStrLn IO.stderr $ "Warning: Caught " <> tshow e
-          OO.throwM $ GenericError (tshow e)
+removePathRecursive pkgStorePath = liftIO (IO.removeDirectoryRecursive pkgStorePath)
