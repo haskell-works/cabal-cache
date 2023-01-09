@@ -3,7 +3,8 @@
 {-# LANGUAGE ScopedTypeVariables   #-}
 
 module HaskellWorks.CabalCache.Error
-  ( ExitFailure(ExitFailure),
+  ( DecodeError(DecodeError),
+    ExitFailure(ExitFailure),
     CopyFailed(CopyFailed),
     GenericError(GenericError),
     InvalidUrl(InvalidUrl),
@@ -16,6 +17,8 @@ module HaskellWorks.CabalCache.Error
 import Data.Text    (Text)
 import GHC.Generics (Generic)
 import Network.URI  (URI)
+
+data DecodeError = DecodeError Text deriving (Eq, Show, Generic)
 
 data ExitFailure = ExitFailure deriving (Eq, Show, Generic)
 

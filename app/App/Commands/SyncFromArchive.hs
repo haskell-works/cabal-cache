@@ -25,7 +25,7 @@ import Data.Maybe                       (fromMaybe)
 import Data.Monoid                      (Dual(Dual), Endo(Endo))
 import Data.Text                        (Text)
 import HaskellWorks.CabalCache.AppError (AwsError, HttpError (..), displayAwsError, displayHttpError)
-import HaskellWorks.CabalCache.Error    (ExitFailure(..), GenericError, InvalidUrl(..), UnsupportedUri(..), NotFound, displayGenericError)
+import HaskellWorks.CabalCache.Error    (DecodeError(..), ExitFailure(..), GenericError, InvalidUrl(..), NotFound, UnsupportedUri(..), displayGenericError)
 import HaskellWorks.CabalCache.IO.Lazy  (readFirstAvailableResource)
 import HaskellWorks.CabalCache.IO.Tar   (ArchiveError(..))
 import HaskellWorks.CabalCache.Location (toLocation, (<.>), (</>), Location)
@@ -95,8 +95,8 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
 
   OO.catchAndExitFailureM @ExitFailure do
     planJson <- Z.loadPlan (opts ^. the @"path" </> opts ^. the @"buildPath")
-      & do OO.catchM @GenericError \e -> do
-            CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayGenericError e
+      & do OO.catchM @DecodeError \e -> do
+            CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> tshow e
             OO.throwM ExitFailure
 
     compilerContext <- Z.mkCompilerContext planJson
