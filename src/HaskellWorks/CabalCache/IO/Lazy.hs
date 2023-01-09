@@ -294,19 +294,8 @@ headHttpUri httpUri = handleHttpError do
   return $ HTTP.responseBody response
 
 removePathRecursive :: ()
-  => e `OO.CouldBe` GenericError
   => MonadCatch m
   => MonadIO m
   => [Char]
   -> ExceptT (OO.Variant e) m ()
-removePathRecursive pkgStorePath = catch action handler
-  where action = liftIO (IO.removeDirectoryRecursive pkgStorePath)
-        handler :: ()
-          => MonadIO m
-          => MonadError (OO.Variant e) m
-          => e `OO.CouldBe` GenericError
-          => IOError
-          -> m b
-        handler e = do
-          CIO.hPutStrLn IO.stderr $ "Warning: Caught " <> tshow e
-          OO.throwM $ GenericError (tshow e)
+removePathRecursive pkgStorePath = liftIO (IO.removeDirectoryRecursive pkgStorePath)
