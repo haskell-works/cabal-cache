@@ -188,9 +188,6 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
             liftIO $ LBS.writeFile tempArchiveFile existingArchiveFileContents
 
             IO.extractTar tempArchiveFile storePath
-              & do OO.catchM @AwsError \e -> do
-                    CIO.putStrLn $ "Unable to extract tar at " <> tshow tempArchiveFile <> " because: " <> displayAwsError e
-                    DQ.fail
               & do OO.catchM @GenericError \e -> do
                     CIO.putStrLn $ "Unable to extract tar at " <> tshow tempArchiveFile <> " because: " <> displayGenericError e
                     DQ.fail

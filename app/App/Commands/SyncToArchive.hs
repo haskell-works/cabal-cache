@@ -156,9 +156,6 @@ runSyncToArchive opts = do
               metas <- createMetadata tempPath pInfo [("store-path", LC8.pack storePath)]
 
               IO.createTar tempArchiveFile (rp2 <> [metas])
-                & do OO.catchM @AwsError \_ -> do
-                      CIO.hPutStrLn IO.stderr $ "Unable tar " <> tshow tempArchiveFile
-                      OO.throwM WorkSkipped
                 & do OO.catchM @GenericError \_ -> do
                       CIO.hPutStrLn IO.stderr $ "Unable tar " <> tshow tempArchiveFile
                       OO.throwM WorkSkipped
