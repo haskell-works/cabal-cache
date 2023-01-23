@@ -38,7 +38,7 @@ import qualified System.IO                          as IO
 {- HLINT ignore "Reduce duplication"        -}
 
 runPlan :: Z.PlanOptions -> IO ()
-runPlan opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
+runPlan opts = OO.runOops $ OO.catchAndExitFailure @ExitFailure do
   let storePath             = opts ^. the @"storePath"
   let archiveUris           = [Local ""]
   let storePathHash         = opts ^. the @"storePathHash" & fromMaybe (H.hashStorePath storePath)
@@ -51,9 +51,9 @@ runPlan opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
   CIO.putStrLn $ "Archive version: "  <> archiveVersion
 
   planJson <- Z.loadPlan (opts ^. the @"path" </> opts ^. the @"buildPath")
-    & do OO.catchM @DecodeError \e -> do
+    & do OO.catch @DecodeError \e -> do
           CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> tshow e
-          OO.throwM ExitFailure
+          OO.throw ExitFailure
 
   packages <- liftIO $ Z.getPackages storePath planJson
 

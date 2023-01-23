@@ -13,9 +13,10 @@ module HaskellWorks.CabalCache.AWS.S3
 import Control.Lens                       ((^.))
 import Control.Monad                      (void, unless)
 import Control.Monad.Catch                (MonadCatch(..))
-import Control.Monad.Except               (MonadIO(..), MonadError(..))
+import Control.Monad.Except               (MonadError)
+import Control.Monad.IO.Class             (MonadIO(..))
 import Control.Monad.Trans.AWS            (RsBody)
-import Control.Monad.Trans.Except         (ExceptT(..))
+import Control.Monad.Trans.Except         (ExceptT)
 import Control.Monad.Trans.Resource       (MonadResource, MonadUnliftIO, liftResourceT, runResourceT)
 import Data.Conduit.Lazy                  (lazyConsume)
 import HaskellWorks.CabalCache.AppError   (AwsError(..))
@@ -60,16 +61,16 @@ uriToS3Uri uri = case fromText @AWS.S3Uri (tshow uri) of
 
 headS3Uri :: ()
   => MonadError (OO.Variant e) m
-  => MonadCatch m
   => e `OO.CouldBe` AwsError
   => e `OO.CouldBe` UnsupportedUri
+  => MonadCatch m
   => MonadResource m
   => HasEnv r
   => r
   -> URI
   -> m AWS.HeadObjectResponse
 headS3Uri envAws uri = do
-  AWS.S3Uri b k <- OO.throwLeftM $ uriToS3Uri (URI.reslashUri uri)
+  AWS.S3Uri b k <- OO.hoistEither $ uriToS3Uri (URI.reslashUri uri)
   AWS.handleAwsError $ AWS.runAWS envAws $ AWS.send $ AWS.headObject b k
 
 putObject :: ()
@@ -84,23 +85,23 @@ putObject :: ()
   -> a
   -> ExceptT (OO.Variant e) m ()
 putObject envAws uri lbs = do
-  AWS.S3Uri b k <- OO.throwLeftM $ uriToS3Uri (URI.reslashUri uri)
+  AWS.S3Uri b k <- OO.hoistEither $ uriToS3Uri (URI.reslashUri uri)
   let req = AWS.toBody lbs
   let po  = AWS.putObject b k req
-  AWS.handleAwsError $ void $ OO.suspendM runResourceT $ AWS.runAWS envAws $ AWS.send po
+  AWS.handleAwsError $ void $ OO.suspend runResourceT $ AWS.runAWS envAws $ AWS.send po
 
 getS3Uri :: ()
   => MonadError (OO.Variant e) m
-  => MonadCatch m
   => e `OO.CouldBe` AwsError
   => e `OO.CouldBe` UnsupportedUri
+  => MonadCatch m
   => MonadResource m
   => HasEnv r
   => r
   -> URI
   -> m LBS.ByteString
 getS3Uri envAws uri = do
-  AWS.S3Uri b k <- OO.throwLeftM $ uriToS3Uri (URI.reslashUri uri)
+  AWS.S3Uri b k <- OO.hoistEither $ uriToS3Uri (URI.reslashUri uri)
   AWS.handleAwsError $ AWS.runAWS envAws $ unsafeDownload b k
 
 copyS3Uri :: ()
@@ -114,11 +115,11 @@ copyS3Uri :: ()
   -> URI
   -> ExceptT (OO.Variant e) m ()
 copyS3Uri envAws source target = do
-  AWS.S3Uri sourceBucket sourceObjectKey <- OO.throwLeftM $ uriToS3Uri (URI.reslashUri source)
-  AWS.S3Uri targetBucket targetObjectKey <- OO.throwLeftM $ uriToS3Uri (URI.reslashUri target)
+  AWS.S3Uri sourceBucket sourceObjectKey <- OO.hoistEither $ uriToS3Uri (URI.reslashUri source)
+  AWS.S3Uri targetBucket targetObjectKey <- OO.hoistEither $ uriToS3Uri (URI.reslashUri target)
   let copyObjectRequest = AWS.copyObject targetBucket (toText sourceBucket <> "/" <> toText sourceObjectKey) targetObjectKey
-  response <- OO.suspendM runResourceT (AWS.runAWS envAws $ AWS.send copyObjectRequest)
+  response <- OO.suspend runResourceT (AWS.runAWS envAws $ AWS.send copyObjectRequest)
   let responseCode = response ^. AWS.corsResponseStatus
   unless (200 <= responseCode && responseCode < 300) do
     liftIO $ CIO.hPutStrLn IO.stderr $ "Error in S3 copy: " <> tshow response
-    OO.throwM CopyFailed
+    OO.throw CopyFailed

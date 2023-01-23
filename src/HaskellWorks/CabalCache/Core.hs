@@ -86,7 +86,7 @@ findExecutable :: ()
   => Text
   -> f Text
 findExecutable exe = fmap T.pack $
-  liftIO (IO.findExecutable (T.unpack exe)) >>= OO.throwNothingAsM (exe <> " is not in path")
+  liftIO (IO.findExecutable (T.unpack exe)) >>= OO.hoistMaybe (exe <> " is not in path")
 
 runGhcPkg :: ()
   => MonadCatch m
@@ -97,7 +97,7 @@ runGhcPkg :: ()
   -> [Text]
   -> m Text
 runGhcPkg cmdExe args = catch (liftIO $ T.pack <$> IO.readProcess (T.unpack cmdExe) (fmap T.unpack args) "") $
-  \(e :: IOError) -> OO.throwM $ "Unable to run " <> cmdExe <> " " <> T.unwords args <> ": " <> tshow e
+  \(e :: IOError) -> OO.throw $ "Unable to run " <> cmdExe <> " " <> T.unwords args <> ": " <> tshow e
 
 verifyGhcPkgVersion :: ()
   => MonadError (OO.Variant e) m
@@ -111,16 +111,17 @@ verifyGhcPkgVersion version cmdExe = do
   stdout <- runGhcPkg cmdExe ["--version"]
   if T.isSuffixOf (" " <> version) (mconcat (L.take 1 (T.lines stdout)))
     then return cmdExe
-    else OO.throwM $ cmdExe <> " is not of version " <> version
+    else OO.throw $ cmdExe <> " is not of version " <> version
 
 mkCompilerContext :: ()
   => MonadIO m
   => MonadCatch m
   => e `OO.CouldBe` Text
-  =>Z.PlanJson
+  => Z.PlanJson
   -> ExceptT (OO.Variant e) m Z.CompilerContext
 mkCompilerContext plan = do
-  compilerVersion <- T.stripPrefix "ghc-" (plan ^. the @"compilerId") & OO.throwNothingAsM @Text "No compiler version available in plan"
+  compilerVersion <- T.stripPrefix "ghc-" (plan ^. the @"compilerId")
+    & OO.hoistMaybe @Text "No compiler version available in plan"
   let versionedGhcPkgCmd = "ghc-pkg-" <> compilerVersion
   ghcPkgCmdPath <-
           (findExecutable (withExeExt' versionedGhcPkgCmd)  >>= verifyGhcPkgVersion compilerVersion)
@@ -151,7 +152,7 @@ loadPlan :: ()
   -> m Z.PlanJson
 loadPlan resolvedBuildPath = do
   lbs <- liftIO (LBS.readFile (resolvedBuildPath </> "cache" </> "plan.json"))
-  a <- OO.throwLeftM $ first (DecodeError . T.pack) (eitherDecode lbs)
+  a <- OO.hoistEither $ first (DecodeError . T.pack) (eitherDecode lbs)
   pure do a :: Z.PlanJson
 
 -------------------------------------------------------------------------------

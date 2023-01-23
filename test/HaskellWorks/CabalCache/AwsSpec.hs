@@ -42,7 +42,7 @@ spec = describe "HaskellWorks.CabalCache.QuerySpec" do
       envAws <- liftIO $ AWS.mkEnv AWS.Oregon (const LBSC.putStrLn)
       let Just uri = URI.parseURI "s3://jky-mayhem/hjddhd"
       result :: Either (OO.Variant '[AwsError, UnsupportedUri]) ()
-        <- liftIO $ runExceptT $ OO.suspendM AWS.runResourceT $ void (AWS.headS3Uri envAws uri)
+        <- liftIO $ runExceptT $ OO.suspend AWS.runResourceT $ void (AWS.headS3Uri envAws uri)
 
       case result of
         Right _ -> H.failure
