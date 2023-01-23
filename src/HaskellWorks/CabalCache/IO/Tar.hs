@@ -12,7 +12,8 @@ module HaskellWorks.CabalCache.IO.Tar
 
 import Control.DeepSeq                  (NFData)
 import Control.Lens                     ((^.))
-import Control.Monad.Except             (MonadIO(..), MonadError)
+import Control.Monad.Except             (MonadError)
+import Control.Monad.IO.Class           (MonadIO(..))
 import Data.Generics.Product.Any        (HasAny(the))
 import Data.Text                        (Text)
 import GHC.Generics                     (Generic)
@@ -43,7 +44,7 @@ createTar tarFile groups = do
   exitCode <- liftIO $ IO.waitForProcess process
   case exitCode of
     IO.ExitSuccess   -> return ()
-    IO.ExitFailure n -> OO.throwM $ ArchiveError $ "Failed to create tar. Exit code: " <> tshow n
+    IO.ExitFailure n -> OO.throw $ ArchiveError $ "Failed to create tar. Exit code: " <> tshow n
 
 extractTar :: ()
   => MonadIO m
@@ -57,7 +58,7 @@ extractTar tarFile targetPath = do
   exitCode <- liftIO $ IO.waitForProcess process
   case exitCode of
     IO.ExitSuccess   -> return ()
-    IO.ExitFailure n -> OO.throwM $ ArchiveError $ "Failed to extract tar.  Exit code: " <> tshow n
+    IO.ExitFailure n -> OO.throw $ ArchiveError $ "Failed to extract tar.  Exit code: " <> tshow n
 
 tarGroupToArgs :: TarGroup -> [String]
 tarGroupToArgs tarGroup = ["-C", tarGroup ^. the @"basePath"] <> tarGroup ^. the @"entryPaths"

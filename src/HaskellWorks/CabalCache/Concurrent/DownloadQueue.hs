@@ -34,13 +34,13 @@ succeed :: forall e a m. ()
   => MonadError (OO.Variant e) m
   => e `OO.CouldBe` DownloadStatus
   => m a
-succeed = OO.throwM DownloadSuccess
+succeed = OO.throw DownloadSuccess
 
 fail :: forall e a m. ()
   => MonadError (OO.Variant e) m
   => e `OO.CouldBe` DownloadStatus
   => m a
-fail = OO.throwM DownloadFailure
+fail = OO.throw DownloadFailure
 
 createDownloadQueue :: [(Z.ProviderId, Z.ConsumerId)] -> STM.STM Z.DownloadQueue
 createDownloadQueue dependencies = do

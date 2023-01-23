@@ -5,7 +5,8 @@ module HaskellWorks.CabalCache.IO.File
     listMaybeDirectory,
   ) where
 
-import Control.Monad.Except (MonadIO(..), MonadError)
+import Control.Monad.Except   (MonadError)
+import Control.Monad.IO.Class (MonadIO(..))
 
 import qualified Control.Monad.Oops                 as OO
 import qualified Data.Text                          as T
@@ -27,7 +28,7 @@ copyDirectoryRecursive source target = do
   exitCode <- liftIO $ IO.waitForProcess process
   case exitCode of
     IO.ExitSuccess   -> return ()
-    IO.ExitFailure n -> OO.throwM $ "cp exited with " <> show n
+    IO.ExitFailure n -> OO.throw $ "cp exited with " <> show n
 
 listMaybeDirectory :: MonadIO m => FilePath -> m [FilePath]
 listMaybeDirectory filepath = do

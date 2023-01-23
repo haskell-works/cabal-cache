@@ -69,7 +69,7 @@ runSyncToArchive :: Z.SyncToArchiveOptions -> IO ()
 runSyncToArchive opts = do
   tEarlyExit <- STM.newTVarIO False
 
-  OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
+  OO.runOops $ OO.catchAndExitFailure @ExitFailure do
     let hostEndpoint        = opts ^. the @"hostEndpoint"
     let storePath           = opts ^. the @"storePath"
     let archiveUri          = opts ^. the @"archiveUri"
@@ -88,14 +88,14 @@ runSyncToArchive opts = do
     CIO.putStrLn $ "AWS Log level: "    <> tshow awsLogLevel
 
     planJson <- Z.loadPlan (opts ^. the @"path" </> opts ^. the @"buildPath")
-      & do OO.catchM @DecodeError \e -> do
+      & do OO.catch @DecodeError \e -> do
             CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> tshow e
-            OO.throwM ExitFailure
+            OO.throw ExitFailure
 
     compilerContext <- Z.mkCompilerContext planJson
-      & do OO.catchM @Text \e -> do
+      & do OO.catch @Text \e -> do
             CIO.hPutStrLn IO.stderr e
-            OO.throwM ExitFailure
+            OO.throw ExitFailure
 
     let compilerId = planJson ^. the @"compilerId"
 
@@ -140,12 +140,12 @@ runSyncToArchive opts = do
           let targetFile = if canShare planData (Z.packageId pInfo) then archiveFile else scopedArchiveFile
 
           archiveFileExists <- IO.resourceExists envAws targetFile
-            & do OO.catchM @InvalidUrl \(InvalidUrl url' reason') -> do
+            & do OO.catch @InvalidUrl \(InvalidUrl url' reason') -> do
                   CIO.hPutStrLn IO.stderr $ "Invalid URL: " <> tshow url' <> ", " <> reason'
-                  OO.throwM WorkSkipped
-            & do OO.catchM @UnsupportedUri \e -> do
+                  OO.throw WorkSkipped
+            & do OO.catch @UnsupportedUri \e -> do
                   CIO.hPutStrLn IO.stderr $ "Unsupported URI: " <> tshow e
-                  OO.throwM WorkSkipped
+                  OO.throw WorkSkipped
 
           unless archiveFileExists do
             packageStorePathExists <- liftIO $ doesDirectoryExist packageStorePath
@@ -163,35 +163,35 @@ runSyncToArchive opts = do
               metas <- createMetadata tempPath pInfo [("store-path", LC8.pack storePath)]
 
               IO.createTar tempArchiveFile (rp2 <> [metas])
-                & do OO.catchM @ArchiveError \_ -> do
+                & do OO.catch @ArchiveError \_ -> do
                       CIO.hPutStrLn IO.stderr $ "Unable tar " <> tshow tempArchiveFile
-                      OO.throwM WorkSkipped
+                      OO.throw WorkSkipped
 
               (liftIO (LBS.readFile tempArchiveFile) >>= IO.writeResource envAws targetFile maxRetries)
-                & do OO.catchM @AwsError \e -> do
+                & do OO.catch @AwsError \e -> do
                       CIO.hPutStrLn IO.stderr $ mempty
                         <> "ERROR: No write access to archive uris: "
                         <> tshow (fmap AWS.toText [scopedArchiveFile, archiveFile])
                         <> " " <> displayAwsError e
-                      OO.throwM WorkFatal
-                & do OO.catchM @HttpError \e -> do
+                      OO.throw WorkFatal
+                & do OO.catch @HttpError \e -> do
                       CIO.hPutStrLn IO.stderr $ mempty
                         <> "ERROR: No write access to archive uris: "
                         <> tshow (fmap AWS.toText [scopedArchiveFile, archiveFile])
                         <> " " <> displayHttpError e
-                      OO.throwM WorkFatal
-                & do OO.catchM @NotImplemented \e -> do
+                      OO.throw WorkFatal
+                & do OO.catch @NotImplemented \e -> do
                       CIO.hPutStrLn IO.stderr $ mempty
                         <> "Operation not implemented: "
                         <> tshow (fmap AWS.toText [scopedArchiveFile, archiveFile])
                         <> " " <> tshow e
-                      OO.throwM WorkFatal
-                & do OO.catchM @UnsupportedUri \e -> do
+                      OO.throw WorkFatal
+                & do OO.catch @UnsupportedUri \e -> do
                       CIO.hPutStrLn IO.stderr $ mempty
                         <> "Unsupported URI: "
                         <> tshow (fmap AWS.toText [scopedArchiveFile, archiveFile])
                         <> ": " <> tshow e
-                      OO.throwM WorkFatal
+                      OO.throw WorkFatal
               
     return ()
 
@@ -208,7 +208,7 @@ workLoop tEarlyExit f = do
   earlyExit <- liftIO $ STM.readTVarIO tEarlyExit
 
   unless earlyExit do
-    f & OO.catchM @WorkResult \case
+    f & OO.catch @WorkResult \case
       WorkSkipped -> pure ()
       WorkFatal   -> liftIO $ STM.atomically $ STM.writeTVar tEarlyExit True
 

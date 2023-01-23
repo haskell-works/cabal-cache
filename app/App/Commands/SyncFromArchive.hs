@@ -14,7 +14,8 @@ import Control.Lens                     ((^..), (.~), (<&>), (%~), (&), (^.), Ea
 import Control.Lens.Combinators         (traverse1)
 import Control.Monad                    (when, unless, forM_)
 import Control.Monad.Catch              (MonadCatch)
-import Control.Monad.Except             (ExceptT, MonadIO(..))
+import Control.Monad.Except             (ExceptT)
+import Control.Monad.IO.Class           (MonadIO(..))
 import Control.Monad.Trans.AWS          (envOverride, setEndpoint)
 import Control.Monad.Trans.Resource     (runResourceT)
 import Data.ByteString                  (ByteString)
@@ -23,6 +24,7 @@ import Data.Generics.Product.Any        (the)
 import Data.List.NonEmpty               (NonEmpty)
 import Data.Maybe                       (fromMaybe)
 import Data.Monoid                      (Dual(Dual), Endo(Endo))
+import Data.Semigroup                   (Semigroup(..))
 import Data.Text                        (Text)
 import HaskellWorks.CabalCache.AppError (AwsError, HttpError (..), displayAwsError, displayHttpError)
 import HaskellWorks.CabalCache.Error    (DecodeError(..), ExitFailure(..), InvalidUrl(..), NotFound, UnsupportedUri(..))
@@ -64,7 +66,6 @@ import qualified System.Directory                                 as IO
 import qualified System.IO                                        as IO
 import qualified System.IO.Temp                                   as IO
 import qualified System.IO.Unsafe                                 as IO
-import Data.Semigroup (Semigroup(..))
 
 {- HLINT ignore "Monoid law, left identity" -}
 {- HLINT ignore "Reduce duplication"        -}
@@ -74,7 +75,7 @@ skippable :: Z.Package -> Bool
 skippable package = package ^. the @"packageType" == "pre-existing"
 
 runSyncFromArchive :: Z.SyncFromArchiveOptions -> IO ()
-runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
+runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailure @ExitFailure do
   let hostEndpoint          = opts ^. the @"hostEndpoint"
   let storePath             = opts ^. the @"storePath"
   let archiveUris           = opts ^. the @"archiveUris" :: NonEmpty Location
@@ -93,16 +94,16 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
   CIO.putStrLn $ "Threads: "          <> tshow threads
   CIO.putStrLn $ "AWS Log level: "    <> tshow awsLogLevel
 
-  OO.catchAndExitFailureM @ExitFailure do
+  OO.catchAndExitFailure @ExitFailure do
     planJson <- Z.loadPlan (opts ^. the @"path" </> opts ^. the @"buildPath")
-      & do OO.catchM @DecodeError \e -> do
+      & do OO.catch @DecodeError \e -> do
             CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> tshow e
-            OO.throwM ExitFailure
+            OO.throw ExitFailure
 
     compilerContext <- Z.mkCompilerContext planJson
-      & do OO.catchM @Text \e -> do
+      & do OO.catch @Text \e -> do
             CIO.hPutStrLn IO.stderr e
-            OO.throwM ExitFailure
+            OO.throw ExitFailure
 
     liftIO $ GhcPkg.testAvailability compilerContext
 
@@ -146,9 +147,9 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
       liftIO $ IO.createDirectoryIfMissing True (tempPath </> T.unpack compilerId </> "package.db")
 
       liftIO $ IO.forkThreadsWait threads $ OO.runOops $ DQ.runQueue downloadQueue $ \packageId -> do
-        OO.recoverOrVoidM @DQ.DownloadStatus do
-          pInfo <- OO.throwNothingM (M.lookup packageId pInfos)
-            & do OO.catchM @() \_ -> do
+        OO.recoverOrVoid @DQ.DownloadStatus do
+          pInfo <- pure (M.lookup packageId pInfos)
+            & do OO.onNothing do
                   CIO.hPutStrLn IO.stderr $ "Warning: Invalid package id: " <> packageId
                   DQ.succeed
 
@@ -159,8 +160,8 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
 
           storeDirectoryExists <- liftIO $ doesDirectoryExist packageStorePath
 
-          package <- OO.throwNothingM (M.lookup packageId planPackages)
-            & do OO.catchM \() -> do
+          package <- pure (M.lookup packageId planPackages)
+            & do OO.onNothing do
                   CIO.hPutStrLn IO.stderr $ "Warning: package not found" <> packageId
                   DQ.succeed
 
@@ -170,23 +171,23 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
 
           when storeDirectoryExists DQ.succeed
 
-          OO.suspendM runResourceT $ ensureStorePathCleanup packageStorePath do
+          OO.suspend runResourceT $ ensureStorePathCleanup packageStorePath do
             let locations = sconcat $ fmap L.tuple2ToNel (NEL.zip archiveFiles scopedArchiveFiles)
 
             (existingArchiveFileContents, existingArchiveFile) <- readFirstAvailableResource envAws locations maxRetries
-              & do OO.catchM @AwsError \e -> do
+              & do OO.catch @AwsError \e -> do
                     CIO.putStrLn $ "Unable to download any of: " <> tshow locations <> " because: " <> displayAwsError e
                     DQ.fail
-              & do OO.catchM @HttpError \e -> do
+              & do OO.catch @HttpError \e -> do
                     CIO.putStrLn $ "Unable to download any of: " <> tshow locations <> " because: " <> displayHttpError e
                     DQ.fail
-              & do OO.catchM @NotFound \_ -> do
+              & do OO.catch @NotFound \_ -> do
                     CIO.putStrLn $ "Not found: " <> tshow locations
                     DQ.fail
-              & do OO.catchM @InvalidUrl \(InvalidUrl url' reason') -> do
+              & do OO.catch @InvalidUrl \(InvalidUrl url' reason') -> do
                     CIO.hPutStrLn IO.stderr $ "Invalid URL: " <> tshow url' <> ", " <> reason'
                     DQ.fail
-              & do OO.catchM @UnsupportedUri \e -> do
+              & do OO.catch @UnsupportedUri \e -> do
                     CIO.hPutStrLn IO.stderr $ tshow e
                     DQ.fail
 
@@ -196,13 +197,13 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
             liftIO $ LBS.writeFile tempArchiveFile existingArchiveFileContents
 
             IO.extractTar tempArchiveFile storePath
-              & do OO.catchM @ArchiveError \(ArchiveError reason') -> do
+              & do OO.catch @ArchiveError \(ArchiveError reason') -> do
                     CIO.putStrLn $ "Unable to extract tar at " <> tshow tempArchiveFile <> " because: " <> reason'
                     DQ.fail
 
             meta <- loadMetadata packageStorePath
-            oldStorePath <- OO.throwNothingM (Map.lookup "store-path" meta)
-              & do OO.catchM \() -> do
+            oldStorePath <- pure (Map.lookup "store-path" meta)
+              & do OO.onNothing do
                     CIO.putStrLn "store-path is missing from Metadata"
                     DQ.fail
 
@@ -226,12 +227,12 @@ ensureStorePathCleanup :: ()
   -> ExceptT (OO.Variant e) m a
   -> ExceptT (OO.Variant e) m a
 ensureStorePathCleanup packageStorePath = 
-  OO.snatchM @DQ.DownloadStatus \downloadStatus -> do
+  OO.snatch @DQ.DownloadStatus \downloadStatus -> do
     case downloadStatus of
       DQ.DownloadFailure -> M.cleanupStorePath packageStorePath
       DQ.DownloadSuccess ->
         CIO.hPutStrLn IO.stdout $ "Successfully cleaned up store path: " <> tshow packageStorePath
-    OO.throwM downloadStatus
+    OO.throw downloadStatus
 
 optsSyncFromArchive :: Parser SyncFromArchiveOptions
 optsSyncFromArchive = SyncFromArchiveOptions

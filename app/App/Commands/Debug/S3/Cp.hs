@@ -38,24 +38,24 @@ import qualified System.IO.Unsafe                   as IO
 {- HLINT ignore "Redundant do"              -}
 
 runCp :: Z.CpOptions -> IO ()
-runCp opts = OO.runOops $ OO.catchAndExitFailureM @ExitFailure do
+runCp opts = OO.runOops $ OO.catchAndExitFailure @ExitFailure do
   let srcUri       = opts ^. the @"srcUri"
   let dstUri       = opts ^. the @"dstUri"
   let hostEndpoint = opts ^. the @"hostEndpoint"
   let awsLogLevel  = opts ^. the @"awsLogLevel"
 
-  OO.catchAndExitFailureM @ExitFailure do
+  OO.catchAndExitFailure @ExitFailure do
     envAws <- liftIO $ IO.unsafeInterleaveIO $ (<&> envOverride .~ Dual (Endo $ \s -> case hostEndpoint of
       Just (hostname, port, ssl) -> setEndpoint ssl hostname port s
       Nothing -> s))
       $ AWS.mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
 
     AWS.copyS3Uri envAws srcUri dstUri
-      & do OO.catchM @AwsError \e -> do
+      & do OO.catch @AwsError \e -> do
             CIO.hPutStrLn IO.stderr $ "Copy failed: " <> displayAwsError e
-      & do OO.catchM @CopyFailed \CopyFailed -> do
+      & do OO.catch @CopyFailed \CopyFailed -> do
             CIO.hPutStrLn IO.stderr $ "Copy failed"
-      & do OO.catchM @UnsupportedUri \e -> do
+      & do OO.catch @UnsupportedUri \e -> do
             CIO.hPutStrLn IO.stderr $ "Unsupported uri: " <> tshow e
 
 optsCp :: OA.Parser CpOptions
