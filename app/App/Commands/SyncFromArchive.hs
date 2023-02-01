@@ -7,7 +7,7 @@ module App.Commands.SyncFromArchive
   ( cmdSyncFromArchive,
   ) where
 
-import App.Commands.Options.Parser      (text)
+import App.Commands.Options.Parser      (optsPackageIds, text)
 import App.Commands.Options.Types       (SyncFromArchiveOptions (SyncFromArchiveOptions))
 import Control.Applicative              (optional, Alternative(..))
 import Control.Lens                     ((^..), (.~), (<&>), (%~), (&), (^.), Each(each))
@@ -295,6 +295,7 @@ optsSyncFromArchive = SyncFromArchiveOptions
       <>  OA.metavar "NUM_RETRIES"
       <>  OA.value 3
       )
+  <*> optsPackageIds
 
 parseEndpoint :: Parser (ByteString, Int, Bool)
 parseEndpoint =
