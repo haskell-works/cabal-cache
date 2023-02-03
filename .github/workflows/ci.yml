@@ -99,13 +99,13 @@ jobs:
           mkdir -p artifacts
 
           7z a "artifacts/$NAME-$arch_os.zip" "$NAME${{env.EXE_EXT}}"
-          echo "::set-output name=path_zip::$NAME.zip"
+          echo "path_zip=$NAME.zip" >> $GITHUB_OUTPUT
 
           gzip -c --best "$NAME${{env.EXE_EXT}}" > artifacts/$NAME-$arch_os${{env.EXE_EXT}}.gz
-          echo "::set-output name=path_gzip::$NAME.gz"
+          echo "path_gzip=$NAME.gz" >> $GITHUB_OUTPUT
 
           tar zcvf "artifacts/$NAME-$arch_os.tar.gz" "$NAME${{env.EXE_EXT}}"
-          echo "::set-output name=path_targz::$NAME.targz"
+          echo "path_targz=$NAME.targz" >> $GITHUB_OUTPUT
 
       - uses: actions/upload-artifact@v2
         with:
@@ -150,7 +150,7 @@ jobs:
             if git push origin "v$package_version"; then
               echo "Tagged with new version "v$package_version""
 
-              echo "::set-output name=tag::v$package_version"
+              echo "tag=v$package_version" >> $GITHUB_OUTPUT
             fi
           fi
 
@@ -209,7 +209,7 @@ jobs:
 
       - name: Create Release
         id: create_release
-        uses: actions/create-release@v1
+        uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
         with:
@@ -252,7 +252,7 @@ jobs:
             *)          exit 1        ;; # error
           esac
           arch_os="$(uname -m)-$os"
-          echo "::set-output name=arch_os::$arch_os"
+          echo "arch_os=$arch_os" >> $GITHUB_OUTPUT
 
       - name: Set some window specific things
         if: matrix.os == 'windows-latest'
