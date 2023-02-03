@@ -83,7 +83,7 @@ failDownload Z.DownloadQueue {..} packageId = do
 
 runQueue :: (MonadIO m, MonadMask m) => Z.DownloadQueue -> (Z.PackageId -> m DownloadStatus) -> m ()
 runQueue downloadQueue f = do
-  maybePackageId <- (liftIO $ STM.atomically $ takeReady downloadQueue)
+  maybePackageId <- liftIO $ STM.atomically $ takeReady downloadQueue
 
   case maybePackageId of
     Just packageId -> do

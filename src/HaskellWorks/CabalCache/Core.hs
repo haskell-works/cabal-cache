@@ -54,11 +54,12 @@ data Tagged a t = Tagged
   } deriving (Eq, Show, Generic, NFData)
 
 data PackageInfo = PackageInfo
-  { compilerId :: Z.CompilerId
-  , packageId  :: Z.PackageId
-  , packageDir :: PackageDir
-  , confPath   :: Tagged ConfPath Presence
-  , libs       :: [Library]
+  { compilerId  :: Z.CompilerId
+  , packageId   :: Z.PackageId
+  , packageName :: Z.PackageName
+  , packageDir  :: PackageDir
+  , confPath    :: Tagged ConfPath Presence
+  , libs        :: [Library]
   } deriving (Show, Eq, Generic, NFData)
 
 (<||>) :: Monad m => ExceptT e m a -> ExceptT e m a -> ExceptT e m a
@@ -170,6 +171,7 @@ mkPackageInfo basePath cid pkg = do
   return PackageInfo
     { compilerId  = cid
     , packageId   = pid
+    , packageName = pkg ^. the @"name"
     , packageDir  = T.unpack cid </> T.unpack pid
     , confPath    = Tagged relativeConfPath (bool Absent Present absoluteConfPathExists)
     , libs        = libFiles

@@ -7,6 +7,7 @@
 module HaskellWorks.CabalCache.Types
   ( CompilerId,
     PackageId,
+    PackageName,
     CompilerContext(..),
     Components(..),
     PlanJson(..),
@@ -21,8 +22,9 @@ import Prelude      hiding (id)
 
 import qualified Data.Aeson as J
 
-type CompilerId = Text
-type PackageId  = Text
+type CompilerId   = Text
+type PackageId    = Text
+type PackageName  = Text
 
 data PlanJson = PlanJson
   { compilerId  :: CompilerId

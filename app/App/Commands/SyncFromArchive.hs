@@ -7,7 +7,7 @@ module App.Commands.SyncFromArchive
   ( cmdSyncFromArchive,
   ) where
 
-import App.Commands.Options.Parser      (text)
+import App.Commands.Options.Parser      (optsPackageIds, text)
 import App.Commands.Options.Types       (SyncFromArchiveOptions (SyncFromArchiveOptions))
 import Control.Applicative              (optional, Alternative(..))
 import Control.Lens                     ((^..), (.~), (<&>), (%~), (&), (^.), Each(each))
@@ -47,6 +47,7 @@ import qualified Data.ByteString.Lazy                             as LBS
 import qualified Data.List.NonEmpty                               as NEL
 import qualified Data.Map                                         as M
 import qualified Data.Map.Strict                                  as Map
+import qualified Data.Set                                         as S
 import qualified Data.Text                                        as T
 import qualified HaskellWorks.CabalCache.AWS.Env                  as AWS
 import qualified HaskellWorks.CabalCache.Concurrent.DownloadQueue as DQ
@@ -85,6 +86,7 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailure @ExitFailure do
   let storePathHash         = opts ^. the @"storePathHash" & fromMaybe (H.hashStorePath storePath)
   let scopedArchiveUris     = versionedArchiveUris & traverse1 %~ (</> T.pack storePathHash)
   let maxRetries            = opts ^. the @"maxRetries"
+  let ignorePackages        = opts ^. the @"ignorePackages"
 
   CIO.putStrLn $ "Store path: "       <> AWS.toText storePath
   CIO.putStrLn $ "Store path hash: "  <> T.pack storePathHash
@@ -157,17 +159,22 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailure @ExitFailure do
           let archiveFiles        = versionedArchiveUris & traverse1 %~ (</> T.pack archiveBaseName)
           let scopedArchiveFiles  = scopedArchiveUris & traverse1 %~ (</> T.pack archiveBaseName)
           let packageStorePath    = storePath </> Z.packageDir pInfo
+          let packageName         = pInfo ^. the @"packageName"
 
           storeDirectoryExists <- liftIO $ doesDirectoryExist packageStorePath
 
           package <- pure (M.lookup packageId planPackages)
             & do OO.onNothing do
-                  CIO.hPutStrLn IO.stderr $ "Warning: package not found" <> packageId
+                  CIO.hPutStrLn IO.stderr $ "Warning: package not found" <> packageName
                   DQ.succeed
 
           when (skippable package) do
-            CIO.putStrLn $ "Skipping: " <> packageId
+            CIO.putStrLn $ "Skipping: " <> packageName
             DQ.succeed
+
+          when (packageName `S.member` ignorePackages) do
+            CIO.putStrLn $ "Ignoring: " <> packageName
+            DQ.fail
 
           when storeDirectoryExists DQ.succeed
 
@@ -295,6 +302,7 @@ optsSyncFromArchive = SyncFromArchiveOptions
       <>  OA.metavar "NUM_RETRIES"
       <>  OA.value 3
       )
+  <*> optsPackageIds
 
 parseEndpoint :: Parser (ByteString, Int, Bool)
 parseEndpoint =

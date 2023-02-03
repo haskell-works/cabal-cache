@@ -6,12 +6,12 @@ module App.Commands.SyncToArchive
   ( cmdSyncToArchive,
   ) where
 
-import App.Commands.Options.Parser      (text)
+import App.Commands.Options.Parser      (optsPackageIds, text)
 import App.Commands.Options.Types       (SyncToArchiveOptions (SyncToArchiveOptions))
-import Control.Applicative              ( Alternative((<|>)), optional)
+import Control.Applicative              (Alternative(..), optional)
 import Control.Concurrent.STM           (TVar)
 import Control.Lens                     ((<&>), (&), (^..), (^.), (.~), Each(each))
-import Control.Monad                    (when, filterM, unless)
+import Control.Monad                    (filterM, when, unless)
 import Control.Monad.Except             (ExceptT)
 import Control.Monad.IO.Class           (MonadIO(..))
 import Control.Monad.Trans.AWS          (envOverride, setEndpoint)
@@ -39,6 +39,7 @@ import qualified Control.Concurrent.STM             as STM
 import qualified Control.Monad.Oops                 as OO
 import qualified Data.ByteString.Lazy               as LBS
 import qualified Data.ByteString.Lazy.Char8         as LC8
+import qualified Data.Set                           as S
 import qualified Data.Text                          as T
 import qualified Data.Text                          as Text
 import qualified HaskellWorks.CabalCache.AWS.Env    as AWS
@@ -79,6 +80,7 @@ runSyncToArchive opts = do
     let storePathHash       = opts ^. the @"storePathHash" & fromMaybe (H.hashStorePath storePath)
     let scopedArchiveUri    = versionedArchiveUri </> T.pack storePathHash
     let maxRetries          = opts ^. the @"maxRetries"
+    let ignorePackages      = opts ^. the @"ignorePackages"
 
     CIO.putStrLn $ "Store path: "       <> AWS.toText storePath
     CIO.putStrLn $ "Store path hash: "  <> T.pack storePathHash
@@ -135,6 +137,11 @@ runSyncToArchive opts = do
           let archiveFile         = versionedArchiveUri </> T.pack archiveFileBasename
           let scopedArchiveFile   = versionedArchiveUri </> T.pack storePathHash </> T.pack archiveFileBasename
           let packageStorePath    = storePath </> Z.packageDir pInfo
+          let packageName         = pInfo ^. the @"packageName"
+
+          when (packageName `S.member` ignorePackages) do
+            CIO.hPutStrLn IO.stderr $ "Ignoring package: " <> packageName
+            OO.throw WorkSkipped
 
           -- either write "normal" package, or a user-specific one if the package cannot be shared
           let targetFile = if canShare planData (Z.packageId pInfo) then archiveFile else scopedArchiveFile
@@ -277,6 +284,7 @@ optsSyncToArchive = SyncToArchiveOptions
       <>  OA.metavar "NUM_RETRIES"
       <>  OA.value 3
       )
+  <*> optsPackageIds
 
 parseEndpoint :: Parser (ByteString, Int, Bool)
 parseEndpoint =
