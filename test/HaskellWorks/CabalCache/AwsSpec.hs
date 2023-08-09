@@ -19,13 +19,13 @@ import HaskellWorks.Hspec.Hedgehog
 import Hedgehog
 import Test.Hspec
 
+import qualified Amazonka                         as AWS
 import qualified Control.Monad.Oops               as OO
 import qualified Data.ByteString.Lazy.Char8       as LBSC
 import qualified Data.Variant                     as OO
 import qualified HaskellWorks.CabalCache.AWS.Env  as AWS
 import qualified HaskellWorks.CabalCache.AWS.S3   as AWS
 import qualified Hedgehog                         as H
-import qualified Network.AWS                      as AWS
 import qualified Network.HTTP.Types               as HTTP
 import qualified Network.URI                      as URI
 import qualified System.Environment               as IO

@@ -16,8 +16,8 @@ import HaskellWorks.CabalCache.Location (Location)
 import HaskellWorks.CabalCache.Types    (PackageId)
 import Network.URI                      (URI)
 
-import qualified Data.List.NonEmpty             as NEL
-import qualified Network.AWS                    as AWS
+import qualified Amazonka           as AWS
+import qualified Data.List.NonEmpty as NEL
 
 data CpOptions = CpOptions
   { region        :: AWS.Region

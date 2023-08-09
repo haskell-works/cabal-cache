@@ -10,25 +10,24 @@ module App.Commands.Debug.S3.Cp
 import App.Commands.Options.Parser      (text)
 import App.Commands.Options.Types       (CpOptions (CpOptions))
 import Control.Applicative              (Alternative(..), optional)
-import Control.Lens                     ((.~), (<&>), (&), (^.))
+import Control.Lens                     ((&), (^.), (.~), (%~))
 import Control.Monad.Except             (MonadIO(..))
-import Control.Monad.Trans.AWS          (envOverride, setEndpoint)
 import Data.ByteString                  (ByteString)
+import Data.Functor                     ((<&>))
 import Data.Generics.Product.Any        (the)
-import Data.Monoid                      (Dual(Dual), Endo(Endo))
 import HaskellWorks.CabalCache.AppError (AwsError(..), displayAwsError)
 import HaskellWorks.CabalCache.Error    (CopyFailed(..), ExitFailure(..), UnsupportedUri)
 import HaskellWorks.CabalCache.Show     (tshow)
 import Network.URI                      (parseURI)
 
+import qualified Amazonka                           as AWS
+import qualified Amazonka.Data                      as AWS
 import qualified App.Commands.Options.Types         as Z
 import qualified Control.Monad.Oops                 as OO
 import qualified Data.Text                          as T
 import qualified HaskellWorks.CabalCache.AWS.Env    as AWS
 import qualified HaskellWorks.CabalCache.AWS.S3     as AWS
 import qualified HaskellWorks.CabalCache.IO.Console as CIO
-import qualified Network.AWS                        as AWS
-import qualified Network.AWS.Data                   as AWS
 import qualified Options.Applicative                as OA
 import qualified System.IO                          as IO
 import qualified System.IO.Unsafe                   as IO
@@ -39,16 +38,25 @@ import qualified System.IO.Unsafe                   as IO
 
 runCp :: Z.CpOptions -> IO ()
 runCp opts = OO.runOops $ OO.catchAndExitFailure @ExitFailure do
-  let srcUri       = opts ^. the @"srcUri"
-  let dstUri       = opts ^. the @"dstUri"
-  let hostEndpoint = opts ^. the @"hostEndpoint"
-  let awsLogLevel  = opts ^. the @"awsLogLevel"
+  let srcUri        = opts ^. the @"srcUri"
+  let dstUri        = opts ^. the @"dstUri"
+  let mHostEndpoint = opts ^. the @"hostEndpoint"
+  let awsLogLevel   = opts ^. the @"awsLogLevel"
 
   OO.catchAndExitFailure @ExitFailure do
-    envAws <- liftIO $ IO.unsafeInterleaveIO $ (<&> envOverride .~ Dual (Endo $ \s -> case hostEndpoint of
-      Just (hostname, port, ssl) -> setEndpoint ssl hostname port s
-      Nothing -> s))
-      $ AWS.mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
+    envAws <-
+      liftIO (IO.unsafeInterleaveIO (AWS.mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)))
+        <&> case mHostEndpoint of
+              Just (host, port, ssl) ->
+                \env ->
+                  env
+                    & the @"overrides" .~ \svc ->
+                        svc & the @"endpoint" %~ \mkEndpoint region ->
+                          mkEndpoint region
+                            & the @"host"   .~ host
+                            & the @"port"   .~ port
+                            & the @"secure" .~ ssl
+              Nothing -> id
 
     AWS.copyS3Uri envAws srcUri dstUri
       & do OO.catch @AwsError \e -> do

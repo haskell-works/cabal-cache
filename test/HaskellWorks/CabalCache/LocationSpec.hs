@@ -11,12 +11,12 @@ import Hedgehog
 import Network.URI                      (URI)
 import Test.Hspec
 
+import qualified Amazonka.Data    as AWS
 import qualified Data.List        as L
 import qualified Data.List        as List
 import qualified Data.Text        as Text
 import qualified Hedgehog.Gen     as Gen
 import qualified Hedgehog.Range   as Range
-import qualified Network.AWS.Data as AWS
 import qualified Network.URI      as URI
 import qualified System.FilePath  as FP
 

@@ -8,8 +8,8 @@ import Control.Monad.Catch              (MonadCatch(..), MonadThrow(throwM))
 import Control.Monad.Except             (MonadError)
 import HaskellWorks.CabalCache.AppError (AwsError(..))
 
+import qualified Amazonka                             as AWS
 import qualified Control.Monad.Oops                   as OO
-import qualified Network.AWS                          as AWS
 import qualified Network.HTTP.Types                   as HTTP
 
 {- HLINT ignore "Redundant do"        -}

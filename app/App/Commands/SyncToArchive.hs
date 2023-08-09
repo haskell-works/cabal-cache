@@ -10,16 +10,14 @@ import App.Commands.Options.Parser      (optsPackageIds, text)
 import App.Commands.Options.Types       (SyncToArchiveOptions (SyncToArchiveOptions))
 import Control.Applicative              (Alternative(..), optional)
 import Control.Concurrent.STM           (TVar)
-import Control.Lens                     ((<&>), (&), (^..), (^.), (.~), Each(each))
+import Control.Lens                     ((<&>), (&), (^..), (^.), (.~), (%~), Each(each))
 import Control.Monad                    (filterM, when, unless)
 import Control.Monad.Except             (ExceptT)
 import Control.Monad.IO.Class           (MonadIO(..))
-import Control.Monad.Trans.AWS          (envOverride, setEndpoint)
 import Data.ByteString                  (ByteString)
 import Data.Generics.Product.Any        (the)
 import Data.List                        ((\\))
 import Data.Maybe                       (fromMaybe)
-import Data.Monoid                      (Dual(Dual), Endo(Endo))
 import Data.Text                        (Text)
 import HaskellWorks.CabalCache.AppError (AwsError, HttpError (..), displayAwsError, displayHttpError)
 import HaskellWorks.CabalCache.Error    (DecodeError, ExitFailure(..), InvalidUrl(..), NotImplemented(..), UnsupportedUri(..))
@@ -33,6 +31,8 @@ import Options.Applicative              (Parser, Mod, CommandFields)
 import System.Directory                 (doesDirectoryExist)
 import System.FilePath                  (takeDirectory)
 
+import qualified Amazonka                           as AWS
+import qualified Amazonka.Data                      as AWS
 import qualified App.Commands.Options.Types         as Z
 import qualified App.Static                         as AS
 import qualified Control.Concurrent.STM             as STM
@@ -50,8 +50,6 @@ import qualified HaskellWorks.CabalCache.IO.Console as CIO
 import qualified HaskellWorks.CabalCache.IO.File    as IO
 import qualified HaskellWorks.CabalCache.IO.Lazy    as IO
 import qualified HaskellWorks.CabalCache.IO.Tar     as IO
-import qualified Network.AWS                        as AWS
-import qualified Network.AWS.Data                   as AWS
 import qualified Options.Applicative                as OA
 import qualified System.Directory                   as IO
 import qualified System.IO                          as IO
@@ -71,7 +69,7 @@ runSyncToArchive opts = do
   tEarlyExit <- STM.newTVarIO False
 
   OO.runOops $ OO.catchAndExitFailure @ExitFailure do
-    let hostEndpoint        = opts ^. the @"hostEndpoint"
+    let mHostEndpoint       = opts ^. the @"hostEndpoint"
     let storePath           = opts ^. the @"storePath"
     let archiveUri          = opts ^. the @"archiveUri"
     let threads             = opts ^. the @"threads"
@@ -101,10 +99,19 @@ runSyncToArchive opts = do
 
     let compilerId = planJson ^. the @"compilerId"
 
-    envAws <- liftIO $ IO.unsafeInterleaveIO $ (<&> envOverride .~ Dual (Endo $ \s -> case hostEndpoint of
-      Just (hostname, port, ssl) -> setEndpoint ssl hostname port s
-      Nothing -> s))
-      $ AWS.mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
+    envAws <-
+      liftIO (IO.unsafeInterleaveIO (AWS.mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)))
+        <&> case mHostEndpoint of
+              Just (host, port, ssl) ->
+                \env ->
+                  env
+                    & the @"overrides" .~ \svc ->
+                        svc & the @"endpoint" %~ \mkEndpoint region ->
+                          mkEndpoint region
+                            & the @"host"   .~ host
+                            & the @"port"   .~ port
+                            & the @"secure" .~ ssl
+              Nothing -> id
 
     let archivePath       = versionedArchiveUri </> compilerId
     let scopedArchivePath = scopedArchiveUri </> compilerId

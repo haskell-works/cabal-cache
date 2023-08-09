@@ -21,9 +21,9 @@ import HaskellWorks.CabalCache.AWS.S3.URI (S3Uri (..))
 import HaskellWorks.CabalCache.Show       (tshow)
 import Network.URI                        (URI)
 
+import qualified Amazonka.Data    as AWS
+import qualified Amazonka.S3      as AWS
 import qualified Data.Text        as T
-import qualified Network.AWS.Data as AWS
-import qualified Network.AWS.S3   as AWS
 import qualified Network.URI      as URI
 import qualified System.FilePath  as FP
 

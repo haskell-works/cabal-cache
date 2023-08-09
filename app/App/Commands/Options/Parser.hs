@@ -11,11 +11,11 @@ import Data.Set                   (Set)
 import Data.Text                  (Text)
 import Options.Applicative        (Parser, ReadM)
 
+import qualified Amazonka.Data                  as AWS
 import qualified Data.Set                       as S
 import qualified Data.Text                      as T
 import qualified Data.Text                      as Text
 import qualified HaskellWorks.CabalCache.Types  as Z
-import qualified Network.AWS.Data               as AWS
 import qualified Options.Applicative            as OA
 
 optsVersion :: Parser VersionOptions
