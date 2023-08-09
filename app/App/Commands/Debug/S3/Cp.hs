@@ -10,13 +10,12 @@ module App.Commands.Debug.S3.Cp
 import App.Commands.Options.Parser      (text)
 import App.Commands.Options.Types       (CpOptions (CpOptions))
 import Control.Applicative              (Alternative(..), optional)
-import Control.Lens                     ((.~), (<&>), (&), (^.))
+import Control.Lens                     ((&), (^.))
 import Control.Monad.Except             (MonadIO(..))
-import Control.Monad.Trans.AWS          (envOverride, setEndpoint)
 import Data.ByteString                  (ByteString)
 import Data.Generics.Product.Any        (the)
-import Data.Monoid                      (Dual(Dual), Endo(Endo))
 import HaskellWorks.CabalCache.AppError (AwsError(..), displayAwsError)
+import HaskellWorks.CabalCache.AWS.Env  (setEnvEndpoint)
 import HaskellWorks.CabalCache.Error    (CopyFailed(..), ExitFailure(..), UnsupportedUri)
 import HaskellWorks.CabalCache.Show     (tshow)
 import Network.URI                      (parseURI)
@@ -45,10 +44,10 @@ runCp opts = OO.runOops $ OO.catchAndExitFailure @ExitFailure do
   let awsLogLevel  = opts ^. the @"awsLogLevel"
 
   OO.catchAndExitFailure @ExitFailure do
-    envAws <- liftIO $ IO.unsafeInterleaveIO $ (<&> envOverride .~ Dual (Endo $ \s -> case hostEndpoint of
-      Just (hostname, port, ssl) -> setEndpoint ssl hostname port s
-      Nothing -> s))
-      $ AWS.mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
+    envAws :: AWS.Env <-
+        liftIO $ IO.unsafeInterleaveIO
+        $ setEnvEndpoint hostEndpoint
+        $ AWS.mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
 
     AWS.copyS3Uri envAws srcUri dstUri
       & do OO.catch @AwsError \e -> do

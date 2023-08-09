@@ -10,18 +10,17 @@ import App.Commands.Options.Parser      (optsPackageIds, text)
 import App.Commands.Options.Types       (SyncToArchiveOptions (SyncToArchiveOptions))
 import Control.Applicative              (Alternative(..), optional)
 import Control.Concurrent.STM           (TVar)
-import Control.Lens                     ((<&>), (&), (^..), (^.), (.~), Each(each))
+import Control.Lens                     ((<&>), (&), (^..), (^.), Each(each))
 import Control.Monad                    (filterM, when, unless)
 import Control.Monad.Except             (ExceptT)
 import Control.Monad.IO.Class           (MonadIO(..))
-import Control.Monad.Trans.AWS          (envOverride, setEndpoint)
 import Data.ByteString                  (ByteString)
 import Data.Generics.Product.Any        (the)
 import Data.List                        ((\\))
 import Data.Maybe                       (fromMaybe)
-import Data.Monoid                      (Dual(Dual), Endo(Endo))
 import Data.Text                        (Text)
 import HaskellWorks.CabalCache.AppError (AwsError, HttpError (..), displayAwsError, displayHttpError)
+import HaskellWorks.CabalCache.AWS.Env  (setEnvEndpoint)
 import HaskellWorks.CabalCache.Error    (DecodeError, ExitFailure(..), InvalidUrl(..), NotImplemented(..), UnsupportedUri(..))
 import HaskellWorks.CabalCache.Location (Location (..), toLocation, (<.>), (</>))
 import HaskellWorks.CabalCache.IO.Tar   (ArchiveError)
@@ -101,9 +100,8 @@ runSyncToArchive opts = do
 
     let compilerId = planJson ^. the @"compilerId"
 
-    envAws <- liftIO $ IO.unsafeInterleaveIO $ (<&> envOverride .~ Dual (Endo $ \s -> case hostEndpoint of
-      Just (hostname, port, ssl) -> setEndpoint ssl hostname port s
-      Nothing -> s))
+    envAws <- liftIO $ IO.unsafeInterleaveIO
+      $ setEnvEndpoint hostEndpoint
       $ AWS.mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
 
     let archivePath       = versionedArchiveUri </> compilerId

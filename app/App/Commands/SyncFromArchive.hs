@@ -10,23 +10,22 @@ module App.Commands.SyncFromArchive
 import App.Commands.Options.Parser      (optsPackageIds, text)
 import App.Commands.Options.Types       (SyncFromArchiveOptions (SyncFromArchiveOptions))
 import Control.Applicative              (optional, Alternative(..))
-import Control.Lens                     ((^..), (.~), (<&>), (%~), (&), (^.), Each(each))
+import Control.Lens                     ((^..), (%~), (&), (^.), Each(each))
 import Control.Lens.Combinators         (traverse1)
 import Control.Monad                    (when, unless, forM_)
 import Control.Monad.Catch              (MonadCatch)
 import Control.Monad.Except             (ExceptT)
 import Control.Monad.IO.Class           (MonadIO(..))
-import Control.Monad.Trans.AWS          (envOverride, setEndpoint)
 import Control.Monad.Trans.Resource     (runResourceT)
 import Data.ByteString                  (ByteString)
 import Data.ByteString.Lazy.Search      (replace)
 import Data.Generics.Product.Any        (the)
 import Data.List.NonEmpty               (NonEmpty)
 import Data.Maybe                       (fromMaybe)
-import Data.Monoid                      (Dual(Dual), Endo(Endo))
 import Data.Semigroup                   (Semigroup(..))
 import Data.Text                        (Text)
 import HaskellWorks.CabalCache.AppError (AwsError, HttpError (..), displayAwsError, displayHttpError)
+import HaskellWorks.CabalCache.AWS.Env  (setEnvEndpoint)
 import HaskellWorks.CabalCache.Error    (DecodeError(..), ExitFailure(..), InvalidUrl(..), NotFound, UnsupportedUri(..))
 import HaskellWorks.CabalCache.IO.Lazy  (readFirstAvailableResource)
 import HaskellWorks.CabalCache.IO.Tar   (ArchiveError(..))
@@ -109,9 +108,8 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailure @ExitFailure do
 
     liftIO $ GhcPkg.testAvailability compilerContext
 
-    envAws <- liftIO $ IO.unsafeInterleaveIO $ (<&> envOverride .~ Dual (Endo $ \s -> case hostEndpoint of
-      Just (hostname, port, ssl) -> setEndpoint ssl hostname port s
-      Nothing -> s))
+    envAws <- liftIO $ IO.unsafeInterleaveIO
+      $ setEnvEndpoint hostEndpoint
       $ AWS.mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
     let compilerId                  = planJson ^. the @"compilerId"
     let storeCompilerPath           = storePath </> T.unpack compilerId
