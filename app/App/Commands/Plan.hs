@@ -20,6 +20,7 @@ import HaskellWorks.CabalCache.Show     (tshow)
 import HaskellWorks.CabalCache.Version  (archiveVersion)
 import Options.Applicative              (Parser, Mod, CommandFields)
 
+import qualified Amazonka.Data                      as AWS
 import qualified App.Commands.Options.Types         as Z
 import qualified App.Static                         as AS
 import qualified Control.Monad.Oops                 as OO
@@ -29,7 +30,6 @@ import qualified Data.Text                          as T
 import qualified HaskellWorks.CabalCache.Core       as Z
 import qualified HaskellWorks.CabalCache.Hash       as H
 import qualified HaskellWorks.CabalCache.IO.Console as CIO
-import qualified Network.AWS.Data                   as AWS
 import qualified Options.Applicative                as OA
 import qualified System.IO                          as IO
 

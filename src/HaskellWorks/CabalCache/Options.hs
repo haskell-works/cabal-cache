@@ -2,8 +2,8 @@ module HaskellWorks.CabalCache.Options
   ( readOrFromTextOption,
   ) where
 
+import Amazonka.Data.Text    (FromText (..), fromText)
 import Control.Applicative   (Alternative(..))
-import Network.AWS.Data.Text (FromText (..), fromText)
 import Options.Applicative   (Parser, Mod, OptionFields)
 import Text.Read             (readEither)
 

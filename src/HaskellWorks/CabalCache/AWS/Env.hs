@@ -1,4 +1,6 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
 module HaskellWorks.CabalCache.AWS.Env
   ( awsLogger
@@ -6,38 +8,49 @@ module HaskellWorks.CabalCache.AWS.Env
   , setEnvEndpoint
   ) where
 
-import Control.Concurrent               (myThreadId)
-import Control.Lens                     ((<&>), (.~))
-import Control.Monad                    (when, forM_)
-import Data.ByteString                  (ByteString)
-import Control.Monad.Trans.AWS          (envOverride, setEndpoint)
-import Data.ByteString.Builder          (toLazyByteString)
-import Data.Monoid                      (Dual(Dual), Endo(Endo))
-import HaskellWorks.CabalCache.Show     (tshow)
-import Network.HTTP.Client              (HttpException (..), HttpExceptionContent (..))
+import Control.Concurrent           (myThreadId)
+import Control.Lens                 ((.~), (%~))
+import Control.Monad                (when, forM_)
+import Data.ByteString              (ByteString)
+import Data.ByteString.Builder      (toLazyByteString)
+import HaskellWorks.CabalCache.Show (tshow)
+import Network.HTTP.Client          (HttpException (..), HttpExceptionContent (..))
+import Data.Generics.Product.Any    (the)
+import Data.Function                ((&))
 
+import qualified Amazonka                           as AWS
 import qualified Data.ByteString                    as BS
 import qualified Data.ByteString.Lazy               as L
 import qualified Data.ByteString.Lazy               as LBS
 import qualified Data.ByteString.Lazy.Char8         as LC8
 import qualified Data.Text.Encoding                 as T
 import qualified HaskellWorks.CabalCache.IO.Console as CIO
-import qualified Network.AWS                        as AWS
 import qualified System.IO                          as IO
 
 setEnvEndpoint :: Maybe (ByteString, Int, Bool) -> IO AWS.Env -> IO AWS.Env
-setEnvEndpoint hostEndpoint =
-  (<&> envOverride .~ Dual (Endo $ \s -> case hostEndpoint of
-    Just (hostname, port, ssl) -> setEndpoint ssl hostname port s
-    Nothing -> s))
+setEnvEndpoint mHostEndpoint getEnv = do
+  env <- getEnv
+  case mHostEndpoint of
+    Just (host, port, ssl) ->
+      pure $ env
+        & the @"overrides" .~ \svc -> do
+            svc & the @"endpoint" %~ \mkEndpoint region -> do
+              mkEndpoint region
+                & the @"host" .~ host
+                & the @"port" .~ port
+                & the @"secure" .~ ssl
+    Nothing -> pure env
 
 mkEnv :: AWS.Region -> (AWS.LogLevel -> LBS.ByteString -> IO ()) -> IO AWS.Env
 mkEnv region lg = do
   lgr <- newAwsLogger lg
-  AWS.newEnv AWS.Discover
-    <&> AWS.envLogger .~ lgr
-    <&> AWS.envRegion .~ region
-    <&> AWS.envRetryCheck .~ retryPolicy 5
+  discoveredEnv <- AWS.newEnv AWS.discover
+
+  pure discoveredEnv
+    { AWS.logger = lgr
+    , AWS.region = region
+    , AWS.retryCheck = retryPolicy 5
+    }
 
 newAwsLogger :: Monad m => (AWS.LogLevel -> LBS.ByteString -> IO ()) -> m AWS.Logger
 newAwsLogger lg = return $ \y b ->

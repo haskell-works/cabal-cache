@@ -14,13 +14,13 @@ import Data.Generics.Product.Any  (HasAny(the))
 import Data.Text                  (Text)
 import GHC.Generics               (Generic)
 
+import qualified Amazonka.Data.Text         as AWS
+import qualified Amazonka.S3                as AWS
 import qualified Data.Aeson                 as J
 import qualified Data.Aeson.Types           as J
 import qualified Data.Attoparsec.Combinator as DAC
 import qualified Data.Attoparsec.Text       as DAT
 import qualified Data.Text                  as T
-import qualified Network.AWS.Data           as AWS
-import qualified Network.AWS.S3             as AWS
 
 data S3Uri = S3Uri
   { bucket    :: AWS.BucketName
@@ -28,7 +28,7 @@ data S3Uri = S3Uri
   } deriving (Show, Eq, Ord, Generic, NFData)
 
 instance AWS.FromText S3Uri where
-  parser = do
+  fromText = DAT.parseOnly $ do
     _  <- DAT.string "s3://"
     bn <- AWS.BucketName . T.pack <$> DAC.many1 (DAT.satisfy (\c -> c /= '/' && c /= ' '))
     _  <- optional (DAT.char '/')

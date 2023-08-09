@@ -30,9 +30,9 @@ import HaskellWorks.CabalCache.AppError (AwsError(..), HttpError(..), statusCode
 import HaskellWorks.CabalCache.Error    (CopyFailed(..), InvalidUrl(..), NotFound(..), NotImplemented(..), UnsupportedUri(..))
 import HaskellWorks.CabalCache.Location (Location (..))
 import HaskellWorks.CabalCache.Show     (tshow)
-import Network.AWS                      (HasEnv)
 import Network.URI                      (URI)
 
+import qualified Amazonka                             as AWS
 import qualified Control.Concurrent                   as IO
 import qualified Control.Monad.Oops                   as OO
 import qualified Data.ByteString.Lazy                 as LBS
@@ -68,7 +68,6 @@ handleHttpError f = catch f $ \(e :: HTTP.HttpException) ->
     HTTP.InvalidUrlException url' reason' -> OO.throw $ InvalidUrl (tshow url') (tshow reason')
 
 readResource :: ()
-  => HasEnv r
   => MonadResource m
   => MonadCatch m
   => e `OO.CouldBe` AwsError
@@ -76,7 +75,7 @@ readResource :: ()
   => e `OO.CouldBe` HttpError
   => e `OO.CouldBe` InvalidUrl
   => e `OO.CouldBe` NotFound
-  => r
+  => AWS.Env
   -> Int
   -> Location
   -> ExceptT (OO.Variant e) m LBS.ByteString
@@ -93,7 +92,6 @@ readResource envAws maxRetries = \case
     scheme    -> OO.throw $ UnsupportedUri uri $ "Unrecognised uri scheme: " <> T.pack scheme
 
 readFirstAvailableResource :: ()
-  => HasEnv t
   => MonadResource m
   => MonadCatch m
   => e `OO.CouldBe` AwsError
@@ -101,7 +99,7 @@ readFirstAvailableResource :: ()
   => e `OO.CouldBe` InvalidUrl
   => e `OO.CouldBe` NotFound
   => e `OO.CouldBe` UnsupportedUri
-  => t
+  => AWS.Env
   -> NonEmpty Location
   -> Int
   -> ExceptT (OO.Variant e) m (LBS.ByteString, Location)
@@ -126,10 +124,9 @@ safePathIsSymbolLink filePath = catch (IO.pathIsSymbolicLink filePath) handler
 resourceExists :: ()
   => MonadUnliftIO m
   => MonadCatch m
-  => HasEnv r
   => e `OO.CouldBe` InvalidUrl
   => e `OO.CouldBe` UnsupportedUri
-  => r
+  => AWS.Env
   -> Location
   -> ExceptT (OO.Variant e) m Bool
 resourceExists envAws = \case
@@ -163,8 +160,7 @@ writeResource :: ()
   => MonadIO m
   => MonadCatch m
   => MonadUnliftIO m
-  => HasEnv r
-  => r
+  => AWS.Env
   -> Location
   -> Int
   -> LBS.ByteString
@@ -243,13 +239,12 @@ retryableHTTPStatuses :: [Int]
 retryableHTTPStatuses = [408, 409, 425, 426, 502, 503, 504]
 
 linkOrCopyResource :: ()
-  => HasEnv r
   => MonadUnliftIO m
   => e `OO.CouldBe` AwsError
   => e `OO.CouldBe` CopyFailed
   => e `OO.CouldBe` NotImplemented
   => e `OO.CouldBe` UnsupportedUri
-  => r
+  => AWS.Env
   -> Location
   -> Location
   -> ExceptT (OO.Variant e) m ()

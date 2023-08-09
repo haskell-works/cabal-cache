@@ -10,7 +10,7 @@ module App.Commands.SyncFromArchive
 import App.Commands.Options.Parser      (optsPackageIds, text)
 import App.Commands.Options.Types       (SyncFromArchiveOptions (SyncFromArchiveOptions))
 import Control.Applicative              (optional, Alternative(..))
-import Control.Lens                     ((^..), (%~), (&), (^.), Each(each))
+import Control.Lens                     ((^..), (%~), (&), (^.), (.~), Each(each))
 import Control.Lens.Combinators         (traverse1)
 import Control.Monad                    (when, unless, forM_)
 import Control.Monad.Catch              (MonadCatch)
@@ -19,13 +19,13 @@ import Control.Monad.IO.Class           (MonadIO(..))
 import Control.Monad.Trans.Resource     (runResourceT)
 import Data.ByteString                  (ByteString)
 import Data.ByteString.Lazy.Search      (replace)
+import Data.Functor                     ((<&>))
 import Data.Generics.Product.Any        (the)
 import Data.List.NonEmpty               (NonEmpty)
 import Data.Maybe                       (fromMaybe)
 import Data.Semigroup                   (Semigroup(..))
 import Data.Text                        (Text)
 import HaskellWorks.CabalCache.AppError (AwsError, HttpError (..), displayAwsError, displayHttpError)
-import HaskellWorks.CabalCache.AWS.Env  (setEnvEndpoint)
 import HaskellWorks.CabalCache.Error    (DecodeError(..), ExitFailure(..), InvalidUrl(..), NotFound, UnsupportedUri(..))
 import HaskellWorks.CabalCache.IO.Lazy  (readFirstAvailableResource)
 import HaskellWorks.CabalCache.IO.Tar   (ArchiveError(..))
@@ -37,6 +37,8 @@ import Options.Applicative              (CommandFields, Mod, Parser)
 import Options.Applicative.NonEmpty     (some1)
 import System.Directory                 (createDirectoryIfMissing, doesDirectoryExist)
 
+import qualified Amazonka                                         as AWS
+import qualified Amazonka.Data                                    as AWS
 import qualified App.Commands.Options.Types                       as Z
 import qualified App.Static                                       as AS
 import qualified Control.Concurrent.STM                           as STM
@@ -59,8 +61,6 @@ import qualified HaskellWorks.CabalCache.IO.Console               as CIO
 import qualified HaskellWorks.CabalCache.IO.Tar                   as IO
 import qualified HaskellWorks.CabalCache.Store                    as M
 import qualified HaskellWorks.CabalCache.Types                    as Z
-import qualified Network.AWS                                      as AWS
-import qualified Network.AWS.Data                                 as AWS
 import qualified Options.Applicative                              as OA
 import qualified System.Directory                                 as IO
 import qualified System.IO                                        as IO
@@ -76,7 +76,7 @@ skippable package = package ^. the @"packageType" == "pre-existing"
 
 runSyncFromArchive :: Z.SyncFromArchiveOptions -> IO ()
 runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailure @ExitFailure do
-  let hostEndpoint          = opts ^. the @"hostEndpoint"
+  let mHostEndpoint         = opts ^. the @"hostEndpoint"
   let storePath             = opts ^. the @"storePath"
   let archiveUris           = opts ^. the @"archiveUris" :: NonEmpty Location
   let threads               = opts ^. the @"threads"
@@ -108,9 +108,19 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailure @ExitFailure do
 
     liftIO $ GhcPkg.testAvailability compilerContext
 
-    envAws <- liftIO $ IO.unsafeInterleaveIO
-      $ setEnvEndpoint hostEndpoint
-      $ AWS.mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
+    envAws <-
+      liftIO (IO.unsafeInterleaveIO (AWS.mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)))
+        <&> case mHostEndpoint of
+              Just (host, port, ssl) ->
+                \env ->
+                  env
+                    & the @"overrides" .~ \svc ->
+                        svc & the @"endpoint" %~ \mkEndpoint region ->
+                          mkEndpoint region
+                            & the @"host"   .~ host
+                            & the @"port"   .~ port
+                            & the @"secure" .~ ssl
+              Nothing -> id
     let compilerId                  = planJson ^. the @"compilerId"
     let storeCompilerPath           = storePath </> T.unpack compilerId
     let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"
