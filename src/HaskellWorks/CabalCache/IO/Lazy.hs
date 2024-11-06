@@ -105,6 +105,10 @@ readFirstAvailableResource :: ()
   -> ExceptT (OO.Variant e) m (LBS.ByteString, Location)
 readFirstAvailableResource envAws (a:|as) maxRetries = do
   (, a) <$> readResource envAws maxRetries a
+    & do OO.catch @NotFound \e -> do
+          case NEL.nonEmpty as of
+            Nothing -> OO.throwF (Identity e)
+            Just nas -> readFirstAvailableResource envAws nas maxRetries
     & do OO.catch @AwsError \e -> do
           case NEL.nonEmpty as of
             Nothing -> OO.throwF (Identity e)

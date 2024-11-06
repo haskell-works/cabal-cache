@@ -24,7 +24,7 @@ jobs:
             os: macOS-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - uses: haskell/actions/setup@v2
         id: setup-haskell
@@ -107,7 +107,7 @@ jobs:
           tar zcvf "artifacts/$NAME-$arch_os.tar.gz" "$NAME${{env.EXE_EXT}}"
           echo "path_targz=$NAME.targz" >> $GITHUB_OUTPUT
 
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v4
         with:
           name: cabal-cache-${{ runner.OS }}-${{ matrix.ghc }}
           path: artifacts
@@ -119,7 +119,7 @@ jobs:
       tag: ${{ steps.tag.outputs.tag }}
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: Check if cabal project is sane
         run: |
@@ -164,7 +164,7 @@ jobs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: Create source distribution
         run: |
@@ -233,7 +233,7 @@ jobs:
         os: [ubuntu-latest, macOS-latest, windows-latest]
 
     steps:
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v4
         id: download_artifact
         with:
           name: cabal-cache-${{ runner.OS }}-${{ matrix.ghc }}
