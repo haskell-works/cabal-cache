@@ -21,7 +21,7 @@ import Control.Monad.Except               (MonadError)
 import Control.Monad.Trans.Resource       (MonadResource, MonadUnliftIO, liftResourceT, runResourceT)
 import Data.Conduit.Lazy                  (lazyConsume)
 import Data.Generics.Product.Any          (the)
-import HaskellWorks.CabalCache.AppError   (AwsError(..))
+import HaskellWorks.CabalCache.AppError   (AwsStatusError(..))
 import HaskellWorks.CabalCache.Error      (CopyFailed(..), UnsupportedUri(..))
 import HaskellWorks.Prelude
 import Lens.Micro
@@ -68,7 +68,7 @@ uriToS3Uri uri = case fromText @AWS.S3Uri (tshow uri) of
 
 headS3Uri :: ()
   => MonadError (OO.Variant e) m
-  => e `OO.CouldBe` AwsError
+  => e `OO.CouldBe` AwsStatusError
   => e `OO.CouldBe` UnsupportedUri
   => MonadCatch m
   => MonadResource m
@@ -77,10 +77,10 @@ headS3Uri :: ()
   -> m AWS.HeadObjectResponse
 headS3Uri envAws uri = do
   AWS.S3Uri b k <- OO.hoistEither $ uriToS3Uri (URI.reslashUri uri)
-  AWS.handleAwsError $ AWS.send envAws $ AWS.newHeadObject b k
+  AWS.handleAwsStatusError $ AWS.send envAws $ AWS.newHeadObject b k
 
 putObject :: ()
-  => e `OO.CouldBe` AwsError
+  => e `OO.CouldBe` AwsStatusError
   => e `OO.CouldBe` UnsupportedUri
   => MonadCatch m
   => MonadUnliftIO m
@@ -93,11 +93,11 @@ putObject envAws uri lbs = do
   AWS.S3Uri b k <- OO.hoistEither $ uriToS3Uri (URI.reslashUri uri)
   let req = AWS.toBody lbs
   let po  = AWS.newPutObject b k req
-  AWS.handleAwsError $ void $ OO.suspend runResourceT $ AWS.send envAws po
+  AWS.handleAwsStatusError $ void $ OO.suspend runResourceT $ AWS.send envAws po
 
 getS3Uri :: ()
   => MonadError (OO.Variant e) m
-  => e `OO.CouldBe` AwsError
+  => e `OO.CouldBe` AwsStatusError
   => e `OO.CouldBe` UnsupportedUri
   => MonadCatch m
   => MonadResource m
@@ -106,11 +106,11 @@ getS3Uri :: ()
   -> m LBS.ByteString
 getS3Uri envAws uri = do
   AWS.S3Uri b k <- OO.hoistEither $ uriToS3Uri (URI.reslashUri uri)
-  AWS.handleAwsError $ unsafeDownload envAws b k
+  AWS.handleAwsStatusError $ unsafeDownload envAws b k
 
 copyS3Uri :: ()
   => MonadUnliftIO m
-  => e `OO.CouldBe` AwsError
+  => e `OO.CouldBe` AwsStatusError
   => e `OO.CouldBe` CopyFailed
   => e `OO.CouldBe` UnsupportedUri
   => AWS.Env

@@ -12,7 +12,7 @@ import Control.Concurrent.STM           (TVar)
 import Control.Lens                     ((^..), (^.), (.~), (%~), Each(each))
 import Data.Generics.Product.Any        (the)
 import Data.List                        ((\\))
-import HaskellWorks.CabalCache.AppError (AwsError, HttpError (..), displayAwsError, displayHttpError)
+import HaskellWorks.CabalCache.AppError (AwsStatusError, HttpError (..), displayAwsStatusError, displayHttpError)
 import HaskellWorks.CabalCache.Error    (DecodeError, ExitFailure(..), InvalidUrl(..), NotImplemented(..), UnsupportedUri(..))
 import HaskellWorks.CabalCache.Location (Location (..), toLocation, (<.>), (</>))
 import HaskellWorks.CabalCache.IO.Tar   (ArchiveError)
@@ -175,11 +175,11 @@ runSyncToArchive opts = do
                       OO.throw WorkSkipped
 
               (liftIO (LBS.readFile tempArchiveFile) >>= IO.writeResource envAws targetFile maxRetries)
-                & do OO.catch @AwsError \e -> do
+                & do OO.catch @AwsStatusError \e -> do
                       CIO.hPutStrLn IO.stderr $ mempty
                         <> "ERROR: No write access to archive uris: "
                         <> tshow (fmap AWS.toText [scopedArchiveFile, archiveFile])
-                        <> " " <> displayAwsError e
+                        <> " " <> displayAwsStatusError e
                       OO.throw WorkFatal
                 & do OO.catch @HttpError \e -> do
                       CIO.hPutStrLn IO.stderr $ mempty

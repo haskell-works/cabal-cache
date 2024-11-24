@@ -8,7 +8,7 @@ module HaskellWorks.CabalCache.AwsSpec
   ( spec
   ) where
 
-import HaskellWorks.CabalCache.AppError (AwsError(..))
+import HaskellWorks.CabalCache.AppError (AwsStatusError(..))
 import HaskellWorks.CabalCache.Error    (UnsupportedUri)
 import HaskellWorks.Hspec.Hedgehog
 import HaskellWorks.Prelude
@@ -37,11 +37,11 @@ spec = describe "HaskellWorks.CabalCache.QuerySpec" do
     unless ci do
       envAws <- liftIO $ AWS.mkEnv AWS.Oregon (const LBSC.putStrLn)
       let Just uri = URI.parseURI "s3://cache.haskellworks.io/test/cabal-cache/ci"
-      result :: Either (OO.Variant '[AwsError, UnsupportedUri]) ()
+      result :: Either (OO.Variant '[AwsStatusError, UnsupportedUri]) ()
         <- liftIO $ runExceptT $ OO.suspend AWS.runResourceT $ void (AWS.headS3Uri envAws uri)
 
       case result of
         Right _ -> H.failure
-        Left e -> OO.toEithers e === Left AwsError
+        Left e -> OO.toEithers e === Left AwsStatusError
           { status = HTTP.Status { HTTP.statusCode = 404 , HTTP.statusMessage = "Not Found" }
           }

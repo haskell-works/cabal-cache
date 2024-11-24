@@ -10,7 +10,7 @@ module App.Commands.Debug.S3.Cp
 import App.Commands.Options.Parser      (text)
 import App.Commands.Options.Types       (CpOptions (CpOptions))
 import Data.Generics.Product.Any        (the)
-import HaskellWorks.CabalCache.AppError (AwsError(..), displayAwsError)
+import HaskellWorks.CabalCache.AppError (AwsStatusError(..), displayAwsStatusError)
 import HaskellWorks.CabalCache.Error    (CopyFailed(..), ExitFailure(..), UnsupportedUri)
 import HaskellWorks.Prelude
 import Lens.Micro
@@ -55,8 +55,8 @@ runCp opts = OO.runOops $ OO.catchAndExitFailure @ExitFailure do
               Nothing -> id
 
     AWS.copyS3Uri envAws srcUri dstUri
-      & do OO.catch @AwsError \e -> do
-            CIO.hPutStrLn IO.stderr $ "Copy failed: " <> displayAwsError e
+      & do OO.catch @AwsStatusError \e -> do
+            CIO.hPutStrLn IO.stderr $ "Copy failed: " <> displayAwsStatusError e
       & do OO.catch @CopyFailed \CopyFailed -> do
             CIO.hPutStrLn IO.stderr $ "Copy failed"
       & do OO.catch @UnsupportedUri \e -> do

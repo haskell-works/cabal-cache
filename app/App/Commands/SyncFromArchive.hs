@@ -16,7 +16,7 @@ import Control.Monad.Trans.Resource     (runResourceT)
 import Data.ByteString.Lazy.Search      (replace)
 import Data.Generics.Product.Any        (the)
 import Data.List.NonEmpty               (NonEmpty)
-import HaskellWorks.CabalCache.AppError (AwsError, HttpError (..), displayAwsError, displayHttpError)
+import HaskellWorks.CabalCache.AppError (AwsStatusError, HttpError (..), displayAwsStatusError, displayHttpError)
 import HaskellWorks.CabalCache.Error    (DecodeError(..), ExitFailure(..), InvalidUrl(..), NotFound, UnsupportedUri(..))
 import HaskellWorks.CabalCache.IO.Lazy  (readFirstAvailableResource)
 import HaskellWorks.CabalCache.IO.Tar   (ArchiveError(..))
@@ -181,8 +181,8 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailure @ExitFailure do
             let locations = sconcat $ fmap L.tuple2ToNel (NEL.zip archiveFiles scopedArchiveFiles)
 
             (existingArchiveFileContents, existingArchiveFile) <- readFirstAvailableResource envAws locations maxRetries
-              & do OO.catch @AwsError \e -> do
-                    CIO.putStrLn $ "Unable to download any of: " <> tshow locations <> " because: " <> displayAwsError e
+              & do OO.catch @AwsStatusError \e -> do
+                    CIO.putStrLn $ "Unable to download any of: " <> tshow locations <> " because: " <> displayAwsStatusError e
                     DQ.downloadFail
               & do OO.catch @HttpError \e -> do
                     CIO.putStrLn $ "Unable to download any of: " <> tshow locations <> " because: " <> displayHttpError e

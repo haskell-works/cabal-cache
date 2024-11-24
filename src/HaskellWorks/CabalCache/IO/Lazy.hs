@@ -22,7 +22,7 @@ import Control.Monad.Except             (MonadError)
 import Control.Monad.Trans.Resource     (MonadResource, runResourceT, MonadUnliftIO)
 import Data.Generics.Product.Any        (HasAny(the))
 import Data.List.NonEmpty               (NonEmpty ((:|)))
-import HaskellWorks.CabalCache.AppError (AwsError(..), HttpError(..), statusCodeOf)
+import HaskellWorks.CabalCache.AppError (AwsStatusError(..), HttpError(..), statusCodeOf)
 import HaskellWorks.CabalCache.Error    (CopyFailed(..), InvalidUrl(..), NotFound(..), NotImplemented(..), UnsupportedUri(..))
 import HaskellWorks.CabalCache.Location (Location (..))
 import HaskellWorks.Prelude
@@ -67,7 +67,7 @@ handleHttpError f = catch f $ \(e :: HTTP.HttpException) ->
 readResource :: ()
   => MonadResource m
   => MonadCatch m
-  => e `OO.CouldBe` AwsError
+  => e `OO.CouldBe` AwsStatusError
   => e `OO.CouldBe` UnsupportedUri
   => e `OO.CouldBe` HttpError
   => e `OO.CouldBe` InvalidUrl
@@ -91,7 +91,7 @@ readResource envAws maxRetries = \case
 readFirstAvailableResource :: ()
   => MonadResource m
   => MonadCatch m
-  => e `OO.CouldBe` AwsError
+  => e `OO.CouldBe` AwsStatusError
   => e `OO.CouldBe` HttpError
   => e `OO.CouldBe` InvalidUrl
   => e `OO.CouldBe` NotFound
@@ -106,7 +106,7 @@ readFirstAvailableResource envAws (a:|as) maxRetries = do
           case NEL.nonEmpty as of
             Nothing -> OO.throwF (Identity e)
             Just nas -> readFirstAvailableResource envAws nas maxRetries
-    & do OO.catch @AwsError \e -> do
+    & do OO.catch @AwsStatusError \e -> do
           case NEL.nonEmpty as of
             Nothing -> OO.throwF (Identity e)
             Just nas -> readFirstAvailableResource envAws nas maxRetries
@@ -145,16 +145,16 @@ resourceExists envAws = \case
   Uri uri -> case uri ^. the @"uriScheme" of
     "s3:" -> do
       OO.suspend runResourceT $ (True <$ S3.headS3Uri envAws (URI.reslashUri uri))
-        & OO.catch @AwsError (pure . const False)
+        & OO.catch @AwsStatusError (pure . const False)
         & OO.catch @HttpError (pure . const False)
     "http:" -> do
       (True <$ headHttpUri (URI.reslashUri uri))
-        & OO.catch @AwsError (pure . const False)
+        & OO.catch @AwsStatusError (pure . const False)
         & OO.catch @HttpError (pure . const False)
     _scheme -> return False
 
 writeResource :: ()
-  => e `OO.CouldBe` AwsError
+  => e `OO.CouldBe` AwsStatusError
   => e `OO.CouldBe` HttpError
   => e `OO.CouldBe` NotImplemented
   => e `OO.CouldBe` UnsupportedUri
@@ -224,13 +224,13 @@ retryUnless p = retryWhen (not . p)
 
 retryS3 :: ()
   => MonadIO m
-  => e `OO.CouldBe` AwsError
+  => e `OO.CouldBe` AwsStatusError
   => Int
   -> ExceptT (OO.Variant e) m a
   -> ExceptT (OO.Variant e) m a
 retryS3 maxRetries a = do
   retryWhen retryPredicate maxRetries a
-  where retryPredicate :: AwsError -> Bool
+  where retryPredicate :: AwsStatusError -> Bool
         retryPredicate e = statusCodeOf e `elem` retryableHTTPStatuses
 
   -- https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html#ErrorCodeList
@@ -241,7 +241,7 @@ retryableHTTPStatuses = [408, 409, 425, 426, 502, 503, 504]
 
 linkOrCopyResource :: ()
   => MonadUnliftIO m
-  => e `OO.CouldBe` AwsError
+  => e `OO.CouldBe` AwsStatusError
   => e `OO.CouldBe` CopyFailed
   => e `OO.CouldBe` NotImplemented
   => e `OO.CouldBe` UnsupportedUri
@@ -259,7 +259,7 @@ linkOrCopyResource envAws source target = case source of
   Uri sourceUri -> case target of
     Local _targetPath -> OO.throw $ NotImplemented "Can't copy between different file backends"
     Uri targetUri    -> case (sourceUri ^. the @"uriScheme", targetUri ^. the @"uriScheme") of
-      ("s3:", "s3:")               -> retryUnless @AwsError ((== 301) . statusCodeOf) 3 (S3.copyS3Uri envAws (URI.reslashUri sourceUri) (URI.reslashUri targetUri))
+      ("s3:", "s3:")               -> retryUnless @AwsStatusError ((== 301) . statusCodeOf) 3 (S3.copyS3Uri envAws (URI.reslashUri sourceUri) (URI.reslashUri targetUri))
       ("http:", "http:")           -> OO.throw $ NotImplemented "Link and copy unsupported for http backend"
       (sourceScheme, targetScheme) -> OO.throw $ NotImplemented $ "Unsupported backend combination: " <> T.pack sourceScheme <> " to " <> T.pack targetScheme
 

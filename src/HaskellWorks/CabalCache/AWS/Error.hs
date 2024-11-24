@@ -1,12 +1,12 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module HaskellWorks.CabalCache.AWS.Error
-  ( handleAwsError
+  ( handleAwsStatusError
   ) where
 
 import Control.Monad.Catch              (MonadCatch(..), MonadThrow(throwM))
 import Control.Monad.Except             (MonadError)
-import HaskellWorks.CabalCache.AppError (AwsError(..))
+import HaskellWorks.CabalCache.AppError (AwsStatusError(..))
 import HaskellWorks.Prelude
 
 import qualified Amazonka                             as AWS
@@ -17,11 +17,11 @@ import qualified Network.HTTP.Types                   as HTTP
 {- HLINT ignore "Reduce duplication"  -}
 {- HLINT ignore "Redundant bracket"   -}
 
-handleAwsError :: (MonadCatch m,
+handleAwsStatusError :: (MonadCatch m,
  MonadError (OO.Variant e) m,
- OO.CouldBeF e AwsError) =>
+ OO.CouldBeF e AwsStatusError) =>
  m a -> m a
-handleAwsError f = catch f $ \(e :: AWS.Error) ->
+handleAwsStatusError f = catch f $ \(e :: AWS.Error) ->
   case e of
-    (AWS.ServiceError (AWS.ServiceError' _ s@(HTTP.Status _ _) _ _ _ _)) -> OO.throw $ AwsError s
+    (AWS.ServiceError (AWS.ServiceError' _ s@(HTTP.Status _ _) _ _ _ _)) -> OO.throw $ AwsStatusError s
     _                                                                    -> throwM e
