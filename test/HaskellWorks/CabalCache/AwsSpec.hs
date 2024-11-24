@@ -8,14 +8,10 @@ module HaskellWorks.CabalCache.AwsSpec
   ( spec
   ) where
 
-import Control.Lens
-import Control.Monad
-import Control.Monad.Except             (runExceptT)
-import Control.Monad.IO.Class
-import Data.Maybe                       (isJust)
 import HaskellWorks.CabalCache.AppError (AwsError(..))
 import HaskellWorks.CabalCache.Error    (UnsupportedUri)
 import HaskellWorks.Hspec.Hedgehog
+import HaskellWorks.Prelude
 import Hedgehog
 import Test.Hspec
 
