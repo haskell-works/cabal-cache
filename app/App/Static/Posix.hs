@@ -3,6 +3,7 @@ module App.Static.Posix
   ) where
 
 import HaskellWorks.CabalCache.Location ((</>))
+import HaskellWorks.Prelude
 
 import qualified App.Static.Base as S
 
