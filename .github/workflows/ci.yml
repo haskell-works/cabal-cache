@@ -20,13 +20,13 @@ jobs:
         ghc: ["9.6.6", "9.4.8", "9.2.8"]
         os: [ubuntu-latest, windows-latest]
         include:
-          - ghc: "8.10.7"
+          - ghc: "9.6.6"
             os: macOS-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: haskell/actions/setup@v2
+      - uses: haskell-actions/setup@v2
         id: setup-haskell
         with:
           ghc-version: ${{ matrix.ghc }}
@@ -35,6 +35,9 @@ jobs:
       - name: Set some window specific things
         if: matrix.os == 'windows-latest'
         run: echo 'EXE_EXT=.exe' >> $GITHUB_ENV
+
+      - name: Cabal update
+        run: cabal update
 
       - name: Configure project
         run: |
@@ -229,7 +232,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["8.10.7"]
+        ghc: ["9.6.6"]
         os: [ubuntu-latest, macOS-latest, windows-latest]
 
     steps:
