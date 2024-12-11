@@ -1,7 +1,3 @@
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE OverloadedStrings     #-}
-
 module HaskellWorks.CabalCache.AppError
   ( AwsStatusError(..),
     HttpError(..),
