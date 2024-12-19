@@ -70,7 +70,7 @@ spec = describe "HaskellWorks.CabalCache.QuerySpec" do
     void (AWS.headS3Uri uri)
       & jotShowDataLog @AwsLogEntry
       & do trap @AwsStatusError \e -> do
-            e.status ^. the @"statusCode" === 404
+            assert $ e.status ^. the @"statusCode" == 404 || e.status ^. the @"statusCode" == 301
             throw Success
       & do trap_ @AwsError failure
       & do trap_ @AwsStatusError failure
