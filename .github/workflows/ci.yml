@@ -23,6 +23,9 @@ jobs:
           - ghc: "9.6.6"
             os: macOS-latest
 
+    permissions:
+      contents: write
+
     steps:
       - uses: actions/checkout@v4
 
@@ -138,6 +141,7 @@ jobs:
           server: http://hackage.haskell.org
           username: ${{ secrets.HACKAGE_USER }}
           password: ${{ secrets.HACKAGE_PASS }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           package_version="$(cat *.cabal | grep '^version:' | cut -d : -f 2 | xargs)"
 
