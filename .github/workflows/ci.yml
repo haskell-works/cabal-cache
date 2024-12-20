@@ -8,6 +8,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
   pull_request:
 
 jobs:
@@ -163,7 +165,7 @@ jobs:
     needs: [build, check]
     runs-on: ubuntu-latest
 
-    if: ${{ needs.check.outputs.tag != '' }}
+    if: startsWith(github.ref, 'refs/tags/v')
 
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
@@ -229,7 +231,7 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
-    if: ${{ needs.check.outputs.tag != '' }}
+    if: startsWith(github.ref, 'refs/tags/v')
 
     strategy:
       fail-fast: false
